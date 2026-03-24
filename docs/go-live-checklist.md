@@ -2,9 +2,13 @@
 
 ## Avant déploiement
 - renseigner toutes les variables de [`.env.example`](/Users/aliouneseck/massage-saas/backend/.env.example)
+- renseigner aussi les variables de [`frontend/.env.example`](/Users/aliouneseck/massage-saas/frontend/.env.example)
 - mettre `DJANGO_DEBUG=false`
 - remplacer `DJANGO_SECRET_KEY`
 - configurer `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `DJANGO_CORS_ALLOWED_ORIGINS`
+- configurer `DATABASE_URL`
+- activer `DJANGO_ENABLE_WHITENOISE=true` si le backend sert ses statiques sur Heroku
+- configurer `NEXT_PUBLIC_SITE_URL` et `NEXT_PUBLIC_API_URL`
 - configurer SMTP réel
 - renseigner les 3 variables Stripe live:
   - `NUADYX_STRIPE_SECRET_KEY`
@@ -40,6 +44,8 @@ cd frontend
 npm run lint
 npm run build
 ```
+- vérifier que `NEXT_PUBLIC_API_URL` pointe bien vers `/api` du backend déployé
+- vérifier que `NEXT_PUBLIC_SITE_URL` correspond à l’URL publique Vercel
 
 ## Scheduler / maintenance
 - planifier `run_booking_maintenance` toutes les 15 minutes

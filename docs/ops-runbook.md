@@ -7,7 +7,11 @@ Obligatoires en production
 - `DJANGO_DEBUG=false`
 - `DJANGO_ALLOWED_HOSTS`
 - `FRONTEND_APP_URL`
+- `DATABASE_URL`
+- `DJANGO_ENABLE_WHITENOISE=true`
 - `DJANGO_DEFAULT_FROM_EMAIL`
+- `NEXT_PUBLIC_SITE_URL`
+- `NEXT_PUBLIC_API_URL`
 
 Email SMTP si envoi réel
 - `DJANGO_EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend`
@@ -27,6 +31,22 @@ Optionnelles
 - `NUADYX_PLATFORM_FEE_RATE`
 - `NUADYX_PAYMENT_HOLD_MINUTES`
 - `NUADYX_AUTO_RELEASE_AFTER_HOURS`
+
+## Déploiement frontend séparé
+
+Frontend Vercel
+- `NEXT_PUBLIC_SITE_URL=https://votre-frontend.example.com`
+- `NEXT_PUBLIC_API_URL=https://votre-backend.example.com/api`
+
+Backend Django
+- `FRONTEND_APP_URL=https://votre-frontend.example.com`
+- `DJANGO_CORS_ALLOWED_ORIGINS=https://votre-frontend.example.com`
+- `DJANGO_CSRF_TRUSTED_ORIGINS=https://votre-frontend.example.com`
+- `DJANGO_ALLOWED_HOSTS=votre-backend.example.com`
+
+Règle pratique
+- `NEXT_PUBLIC_API_URL` doit pointer vers le backend et se terminer logiquement par `/api`
+- `FRONTEND_APP_URL` doit être l’URL publique du frontend sans suffixe `/api`
 
 ## Mode test vs mode live
 
@@ -121,6 +141,10 @@ Exemple job plateforme/cloud
 - Render / Railway / Fly machine cron:
   - commande: `backend/venv/bin/python backend/manage.py run_booking_maintenance`
   - fréquence: `*/15 * * * *`
+
+Particularité Heroku Scheduler
+- fréquence minimale disponible: toutes les 10 minutes
+- recommandation Heroku pour NUADYX: toutes les 10 minutes
 
 ## Vérifications d'exploitation
 

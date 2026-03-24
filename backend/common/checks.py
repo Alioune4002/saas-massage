@@ -62,6 +62,26 @@ def nuadyx_configuration_checks(app_configs, **kwargs):
             )
         )
 
+    if not settings.DEBUG and not bool(getattr(settings, "DATABASES", {}).get("default", {}).get("HOST")):
+        issues.append(
+            Warning(
+                "DATABASE_URL n'est pas configurée ou le backend reste sur une base locale. Heroku nécessite une base distante.",
+                id="nuadyx.W005",
+            )
+        )
+
+    if (
+        not settings.DEBUG
+        and getattr(settings, "DJANGO_ENABLE_WHITENOISE", False)
+        and not getattr(settings, "WHITENOISE_INSTALLED", False)
+    ):
+        issues.append(
+            Warning(
+                "DJANGO_ENABLE_WHITENOISE est actif mais le paquet whitenoise n'est pas installé.",
+                id="nuadyx.W006",
+            )
+        )
+
     if not settings.ALLOWED_HOSTS or settings.ALLOWED_HOSTS == ["127.0.0.1", "localhost"]:
         issues.append(
             Warning(

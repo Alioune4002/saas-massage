@@ -11,11 +11,54 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import importlib.util
 import os
 import sys
+from urllib.parse import parse_qs, unquote, urlparse
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 TESTING = "test" in sys.argv
+
+
+def build_database_config():
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if not database_url:
+        return {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+
+    parsed = urlparse(database_url)
+    scheme = parsed.scheme.split("+")[0]
+
+    if scheme in {"postgres", "postgresql", "pgsql"}:
+        options = {}
+        query = parse_qs(parsed.query)
+        sslmode = query.get("sslmode", [None])[-1]
+        if sslmode:
+            options["sslmode"] = sslmode
+        elif not DEBUG:
+            options["sslmode"] = "require"
+
+        return {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": unquote(parsed.path.lstrip("/")),
+            "USER": unquote(parsed.username or ""),
+            "PASSWORD": unquote(parsed.password or ""),
+            "HOST": parsed.hostname or "",
+            "PORT": str(parsed.port or "5432"),
+            "CONN_MAX_AGE": 60,
+            "OPTIONS": options,
+        }
+
+    if scheme == "sqlite":
+        sqlite_path = unquote(parsed.path or "").lstrip("/")
+        return {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / sqlite_path if sqlite_path else BASE_DIR / "db.sqlite3",
+        }
+
+    raise ValueError(f"Schéma DATABASE_URL non pris en charge: {scheme}")
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
@@ -79,12 +122,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
-}
+DATABASES = {"default": build_database_config()}
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -102,6 +140,22 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+DJANGO_ENABLE_WHITENOISE = (
+    os.getenv("DJANGO_ENABLE_WHITENOISE", "false" if DEBUG else "true").lower()
+    == "true"
+)
+WHITENOISE_INSTALLED = importlib.util.find_spec("whitenoise") is not None
+
+if DJANGO_ENABLE_WHITENOISE and WHITENOISE_INSTALLED:
+    MIDDLEWARE.insert(2, "whitenoise.middleware.WhiteNoiseMiddleware")
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 
 SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "false" if DEBUG else "true").lower() == "true"
 SESSION_COOKIE_SECURE = os.getenv("DJANGO_SESSION_COOKIE_SECURE", "false" if DEBUG else "true").lower() == "true"
