@@ -1,0 +1,203 @@
+@import "tailwindcss";
+
+:root {
+  --background: #07111f;
+  --background-elevated: #0b1627;
+  --background-soft: rgba(12, 21, 38, 0.72);
+  --surface: rgba(11, 20, 35, 0.78);
+  --surface-strong: rgba(18, 31, 53, 0.96);
+  --surface-muted: rgba(255, 255, 255, 0.06);
+  --foreground: #f5f7fb;
+  --foreground-muted: rgba(232, 238, 247, 0.74);
+  --foreground-subtle: rgba(214, 224, 238, 0.56);
+  --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --primary: #8ff2cb;
+  --primary-strong: #5fe1b1;
+  --primary-contrast: #04111c;
+  --accent: #7c9cff;
+  --danger: #ff7d87;
+  --success: #7ae1b6;
+  --warning: #ffcb74;
+  --shadow-lg: 0 32px 80px rgba(2, 8, 23, 0.42);
+  --shadow-md: 0 16px 42px rgba(2, 8, 23, 0.28);
+  --panel-overlay: linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(8, 14, 27, 0.92));
+  --hero-glow-a: rgba(124, 156, 255, 0.2);
+  --hero-glow-b: rgba(143, 242, 203, 0.16);
+  --grid-line: rgba(255, 255, 255, 0.03);
+  --field-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --drawer-overlay: rgba(7, 17, 31, 0.62);
+  --inverse-foreground: #ffffff;
+  --inverse-foreground-muted: rgba(255, 255, 255, 0.84);
+  --inverse-foreground-subtle: rgba(255, 255, 255, 0.66);
+  --hero-scrim: rgba(7, 17, 31, 0.12);
+  --hero-scrim-strong: rgba(7, 17, 31, 0.42);
+  --hero-card-surface: rgba(255, 255, 255, 0.1);
+  --hero-card-surface-strong: rgba(255, 255, 255, 0.14);
+  --hero-card-muted: rgba(0, 0, 0, 0.1);
+  --hero-card-border: rgba(255, 255, 255, 0.18);
+  --hero-card-border-soft: rgba(255, 255, 255, 0.14);
+}
+
+:root[data-theme="light"] {
+  --background: #f4f7fb;
+  --background-elevated: #ecf1f7;
+  --background-soft: rgba(255, 255, 255, 0.76);
+  --surface: rgba(255, 255, 255, 0.84);
+  --surface-strong: rgba(255, 255, 255, 0.98);
+  --surface-muted: rgba(15, 23, 42, 0.045);
+  --foreground: #0e1726;
+  --foreground-muted: rgba(36, 49, 69, 0.8);
+  --foreground-subtle: rgba(64, 78, 99, 0.68);
+  --border: rgba(15, 23, 42, 0.12);
+  --border-strong: rgba(15, 23, 42, 0.18);
+  --primary: #0f766e;
+  --primary-strong: #0a5d57;
+  --primary-contrast: #f9fffc;
+  --accent: #3158d8;
+  --danger: #c83f57;
+  --success: #0f8f66;
+  --warning: #b7791f;
+  --shadow-lg: 0 24px 70px rgba(15, 23, 42, 0.12);
+  --shadow-md: 0 18px 42px rgba(15, 23, 42, 0.08);
+  --panel-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(247, 250, 253, 0.98));
+  --hero-glow-a: rgba(49, 88, 216, 0.08);
+  --hero-glow-b: rgba(15, 118, 110, 0.09);
+  --grid-line: rgba(15, 23, 42, 0.04);
+  --field-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  --drawer-overlay: rgba(17, 24, 39, 0.28);
+  --inverse-foreground: #ffffff;
+  --inverse-foreground-muted: rgba(255, 255, 255, 0.88);
+  --inverse-foreground-subtle: rgba(255, 255, 255, 0.72);
+  --hero-scrim: rgba(7, 17, 31, 0.08);
+  --hero-scrim-strong: rgba(7, 17, 31, 0.34);
+  --hero-card-surface: rgba(255, 255, 255, 0.16);
+  --hero-card-surface-strong: rgba(255, 255, 255, 0.2);
+  --hero-card-muted: rgba(255, 255, 255, 0.08);
+  --hero-card-border: rgba(255, 255, 255, 0.22);
+  --hero-card-border-soft: rgba(255, 255, 255, 0.16);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-background-elevated: var(--background-elevated);
+  --color-background-soft: var(--background-soft);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--foreground-muted);
+  --color-subtle-foreground: var(--foreground-subtle);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-contrast: var(--primary-contrast);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  min-height: 100vh;
+  font-family: var(--font-manrope), sans-serif;
+  background-image:
+    radial-gradient(circle at top left, var(--hero-glow-a), transparent 28%),
+    radial-gradient(circle at top right, var(--hero-glow-b), transparent 32%),
+    linear-gradient(180deg, var(--background-elevated) 0%, var(--background) 42%, var(--background) 100%);
+  background-attachment: fixed;
+}
+
+:root[data-theme="light"] body {
+  background-image:
+    radial-gradient(circle at top left, var(--hero-glow-a), transparent 28%),
+    radial-gradient(circle at top right, var(--hero-glow-b), transparent 32%),
+    linear-gradient(180deg, #f9fbfd 0%, var(--background-elevated) 42%, var(--background) 100%);
+}
+
+body::selection {
+  background: rgba(143, 242, 203, 0.32);
+  color: white;
+}
+
+a,
+button,
+input,
+textarea,
+select {
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    opacity 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.glass-panel {
+  background: var(--panel-overlay), var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(22px);
+}
+
+.soft-grid {
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.surface-soft {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+}
+
+.surface-subtle {
+  background: var(--background-soft);
+  border: 1px solid var(--border);
+}
+
+.text-muted {
+  color: var(--foreground-muted);
+}
+
+.text-subtle {
+  color: var(--foreground-subtle);
+}
