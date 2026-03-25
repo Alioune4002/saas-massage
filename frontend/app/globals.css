@@ -104,12 +104,14 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   min-height: 100vh;
+  overflow-x: hidden;
   font-family: var(--font-manrope), sans-serif;
   background-image:
     radial-gradient(circle at top left, var(--hero-glow-a), transparent 28%),
@@ -142,6 +144,13 @@ select {
     opacity 180ms ease,
     box-shadow 180ms ease,
     transform 180ms ease;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
 }
 
 button {

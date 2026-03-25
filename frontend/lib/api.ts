@@ -268,6 +268,9 @@ export type DashboardProfile = {
   id: string;
   business_name: string;
   slug: string;
+  owner_first_name: string;
+  owner_last_name: string;
+  login_email: string;
   activity_type: "solo" | "studio" | "spa" | "team";
   practice_mode: "studio" | "home" | "mobile" | "corporate" | "mixed";
   city: string;
@@ -734,6 +737,7 @@ export async function loginWithEmailPassword(payload: {
 export async function registerPractitioner(payload: {
   first_name: string;
   last_name: string;
+  business_name: string;
   email: string;
   password: string;
   password_confirmation: string;

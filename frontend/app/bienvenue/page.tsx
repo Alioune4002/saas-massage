@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   CalendarPlus2,
+  ChevronLeft,
   ChevronRight,
   Copy,
   Sparkles,
@@ -48,6 +49,14 @@ import { rememberWelcomeNotice } from "@/lib/practitioner-space";
 import { createDefaultPublicProfileDraft } from "@/lib/public-profile";
 import { formatCurrency, formatDateTimeLong } from "@/lib/utils";
 
+const ACTIVITY_HEADLINE_LIMIT = 180;
+
+type ServiceVariantForm = {
+  id: string;
+  duration_minutes: number;
+  price_eur: string;
+};
+
 function toLocalDateTimeInputValue(date: Date) {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
@@ -70,6 +79,17 @@ function buildDefaultSlotRange() {
   };
 }
 
+function buildServiceVariant(
+  duration_minutes = 60,
+  price_eur = "85.00"
+): ServiceVariantForm {
+  return {
+    id: crypto.randomUUID(),
+    duration_minutes,
+    price_eur,
+  };
+}
+
 export default function WelcomePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<DashboardProfile | null>(null);
@@ -80,13 +100,26 @@ export default function WelcomePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [activityForm, setActivityForm] = useState({
+    business_name: "",
+    activity_type: "solo" as DashboardProfile["activity_type"],
+    practice_mode: "studio" as DashboardProfile["practice_mode"],
+    city: "",
+    phone: "",
+    public_headline: "",
+  });
+  const [activityErrors, setActivityErrors] = useState({
+    business_name: "",
+    public_headline: "",
+  });
   const [serviceForm, setServiceForm] = useState({
     title: "",
     short_description: "",
     full_description: "",
-    duration_minutes: 60,
-    price_eur: "85.00",
   });
+  const [serviceVariants, setServiceVariants] = useState<ServiceVariantForm[]>([
+    buildServiceVariant(),
+  ]);
   const [slotForm, setSlotForm] = useState({
     service: "",
     slot_type: "open" as "open" | "blocked",
@@ -122,6 +155,14 @@ export default function WelcomePage() {
         setAssistant(assistantData);
         setServices(servicesData);
         setAvailabilities(availabilitiesData);
+        setActivityForm({
+          business_name: profileData.business_name,
+          activity_type: profileData.activity_type,
+          practice_mode: profileData.practice_mode,
+          city: profileData.city,
+          phone: profileData.phone,
+          public_headline: profileData.public_headline,
+        });
         setError("");
       } catch {
         if (!active) return;
@@ -220,20 +261,35 @@ export default function WelcomePage() {
   async function handleSaveActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!profile) return;
+    const nextErrors = {
+      business_name: "",
+      public_headline: "",
+    };
 
-    const form = event.currentTarget;
-    const formData = new FormData(form);
+    if (!activityForm.business_name.trim()) {
+      nextErrors.business_name = "Renseignez le nom visible de votre activité.";
+    }
+
+    if (activityForm.public_headline.length > ACTIVITY_HEADLINE_LIMIT) {
+      nextErrors.public_headline =
+        "Utilisez une phrase plus courte: 180 caractères maximum.";
+    }
+
+    setActivityErrors(nextErrors);
+    if (nextErrors.business_name || nextErrors.public_headline) {
+      return;
+    }
 
     try {
       setSaving(true);
       setError("");
       await patchProfile({
-        business_name: String(formData.get("business_name") || ""),
-        activity_type: String(formData.get("activity_type") || ""),
-        practice_mode: String(formData.get("practice_mode") || ""),
-        city: String(formData.get("city") || ""),
-        phone: String(formData.get("phone") || ""),
-        public_headline: String(formData.get("public_headline") || ""),
+        business_name: activityForm.business_name,
+        activity_type: activityForm.activity_type,
+        practice_mode: activityForm.practice_mode,
+        city: activityForm.city,
+        phone: activityForm.phone,
+        public_headline: activityForm.public_headline,
         onboarding_step: "services",
       });
       setNotice("Votre activité a été enregistrée.");
@@ -250,19 +306,24 @@ export default function WelcomePage() {
     try {
       setSaving(true);
       setError("");
-      await createService({
-        ...serviceForm,
-        sort_order: services.length,
-      });
+      await Promise.all(
+        serviceVariants.map((variant, index) =>
+          createService({
+            ...serviceForm,
+            duration_minutes: variant.duration_minutes,
+            price_eur: variant.price_eur,
+            sort_order: services.length + index,
+          })
+        )
+      );
       setServiceForm({
         title: "",
         short_description: "",
         full_description: "",
-        duration_minutes: 60,
-        price_eur: "85.00",
       });
+      setServiceVariants([buildServiceVariant()]);
       await refreshProfileData();
-      setNotice("Votre soin a été ajouté.");
+      setNotice("Votre soin a été ajouté avec ses différentes durées.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible d’ajouter ce soin.");
     } finally {
@@ -434,6 +495,30 @@ export default function WelcomePage() {
     setNotice("Lien public copié.");
   }
 
+  async function handleGoBack() {
+    if (activeStepIndex <= 0) {
+      return;
+    }
+
+    const previousStep = onboardingSteps[activeStepIndex - 1];
+    if (!previousStep) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      await patchProfile({ onboarding_step: previousStep.key });
+      setNotice("Vous pouvez reprendre l’étape précédente.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Impossible de revenir à l’étape précédente."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen px-4 py-6 md:px-6">
@@ -569,7 +654,16 @@ export default function WelcomePage() {
             <form onSubmit={handleSaveActivity} className="mt-8 grid gap-5">
               <div className="grid gap-5 md:grid-cols-2">
                 <FieldWrapper label="Type d’activité">
-                  <Select name="activity_type" defaultValue={profile.activity_type}>
+                  <Select
+                    name="activity_type"
+                    value={activityForm.activity_type}
+                    onChange={(event) =>
+                      setActivityForm((current) => ({
+                        ...current,
+                        activity_type: event.target.value as DashboardProfile["activity_type"],
+                      }))
+                    }
+                  >
                     {activityTypeOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
@@ -579,7 +673,16 @@ export default function WelcomePage() {
                 </FieldWrapper>
 
                 <FieldWrapper label="Façon d’exercer">
-                  <Select name="practice_mode" defaultValue={profile.practice_mode}>
+                  <Select
+                    name="practice_mode"
+                    value={activityForm.practice_mode}
+                    onChange={(event) =>
+                      setActivityForm((current) => ({
+                        ...current,
+                        practice_mode: event.target.value as DashboardProfile["practice_mode"],
+                      }))
+                    }
+                  >
                     {practiceModeOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
@@ -591,27 +694,96 @@ export default function WelcomePage() {
 
               <div className="grid gap-5 md:grid-cols-2">
                 <FieldWrapper label="Ville principale">
-                  <Input name="city" defaultValue={profile.city} required />
+                  <Input
+                    name="city"
+                    value={activityForm.city}
+                    onChange={(event) =>
+                      setActivityForm((current) => ({
+                        ...current,
+                        city: event.target.value,
+                      }))
+                    }
+                    required
+                  />
                 </FieldWrapper>
 
                 <FieldWrapper label="Téléphone professionnel" hint="Optionnel">
-                  <Input name="phone" defaultValue={profile.phone} />
+                  <Input
+                    name="phone"
+                    value={activityForm.phone}
+                    onChange={(event) =>
+                      setActivityForm((current) => ({
+                        ...current,
+                        phone: event.target.value,
+                      }))
+                    }
+                  />
                 </FieldWrapper>
               </div>
 
               <FieldWrapper label="Nom affiché">
-                <Input name="business_name" defaultValue={profile.business_name} required />
+                <Input
+                  name="business_name"
+                  value={activityForm.business_name}
+                  onChange={(event) => {
+                    setActivityErrors((current) => ({ ...current, business_name: "" }));
+                    setActivityForm((current) => ({
+                      ...current,
+                      business_name: event.target.value,
+                    }));
+                  }}
+                  required
+                />
               </FieldWrapper>
+              {activityErrors.business_name ? (
+                <p className="-mt-3 text-sm text-[var(--danger)]">
+                  {activityErrors.business_name}
+                </p>
+              ) : null}
 
               <FieldWrapper label="Phrase courte d’accroche" hint="Optionnel">
-                <Input
+                <Textarea
                   name="public_headline"
-                  defaultValue={profile.public_headline}
+                  value={activityForm.public_headline}
+                  rows={4}
+                  className="min-h-[132px]"
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setActivityErrors((current) => ({
+                      ...current,
+                      public_headline:
+                        value.length > ACTIVITY_HEADLINE_LIMIT
+                          ? "Utilisez une phrase plus courte: 180 caractères maximum."
+                          : "",
+                    }));
+                    setActivityForm((current) => ({
+                      ...current,
+                      public_headline: value,
+                    }));
+                  }}
                   placeholder="Massage et bien-être sur rendez-vous"
                 />
               </FieldWrapper>
+              <div className="-mt-3 flex items-start justify-between gap-4 text-sm">
+                <p className="text-[var(--danger)]">
+                  {activityErrors.public_headline || ""}
+                </p>
+                <p className="shrink-0 text-[var(--foreground-subtle)]">
+                  {activityForm.public_headline.length}/{ACTIVITY_HEADLINE_LIMIT}
+                </p>
+              </div>
 
-              <div className="flex justify-end">
+              <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="lg"
+                  disabled={saving}
+                  onClick={() => void handleGoBack()}
+                  iconLeft={<ChevronLeft className="h-4 w-4" />}
+                >
+                  Revenir en arrière
+                </Button>
                 <Button
                   type="submit"
                   size="lg"
@@ -694,38 +866,94 @@ export default function WelcomePage() {
                   />
                 </FieldWrapper>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <FieldWrapper label="Durée (minutes)">
-                    <Input
-                      type="number"
-                      min={15}
-                      step={15}
-                      value={serviceForm.duration_minutes}
-                      onChange={(event) =>
-                        setServiceForm((current) => ({
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-[var(--foreground)]">
+                        Durées et tarifs
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--foreground-muted)]">
+                        Tu peux proposer plusieurs formats pour un même soin.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setServiceVariants((current) => [
                           ...current,
-                          duration_minutes: Number(event.target.value),
-                        }))
+                          buildServiceVariant(),
+                        ])
                       }
-                      required
-                    />
-                  </FieldWrapper>
+                    >
+                      Ajouter une durée
+                    </Button>
+                  </div>
 
-                  <FieldWrapper label="Tarif">
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={serviceForm.price_eur}
-                      onChange={(event) =>
-                        setServiceForm((current) => ({
-                          ...current,
-                          price_eur: event.target.value,
-                        }))
-                      }
-                      required
-                    />
-                  </FieldWrapper>
+                  {serviceVariants.map((variant, index) => (
+                    <div
+                      key={variant.id}
+                      className="grid gap-4 rounded-[1.4rem] border border-[var(--border)] bg-[var(--background-soft)] p-4 md:grid-cols-[1fr_1fr_auto]"
+                    >
+                      <FieldWrapper label={`Durée ${index + 1}`}>
+                        <Input
+                          type="number"
+                          min={15}
+                          step={15}
+                          value={variant.duration_minutes}
+                          onChange={(event) =>
+                            setServiceVariants((current) =>
+                              current.map((item) =>
+                                item.id === variant.id
+                                  ? {
+                                      ...item,
+                                      duration_minutes: Number(event.target.value || 0),
+                                    }
+                                  : item
+                              )
+                            )
+                          }
+                          required
+                        />
+                      </FieldWrapper>
+
+                      <FieldWrapper label="Tarif">
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={variant.price_eur}
+                          onChange={(event) =>
+                            setServiceVariants((current) =>
+                              current.map((item) =>
+                                item.id === variant.id
+                                  ? { ...item, price_eur: event.target.value }
+                                  : item
+                              )
+                            )
+                          }
+                          required
+                        />
+                      </FieldWrapper>
+
+                      <div className="flex items-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={serviceVariants.length === 1}
+                          onClick={() =>
+                            setServiceVariants((current) =>
+                              current.filter((item) => item.id !== variant.id)
+                            )
+                          }
+                        >
+                          Retirer
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 <FieldWrapper label="Description complémentaire" hint="Optionnel">
@@ -741,15 +969,27 @@ export default function WelcomePage() {
                 </FieldWrapper>
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-                  <Button
-                    type="submit"
-                    variant="secondary"
-                    size="lg"
-                    disabled={saving}
-                    iconLeft={<Sparkles className="h-4 w-4" />}
-                  >
-                    Ajouter ce soin
-                  </Button>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="lg"
+                      disabled={saving}
+                      onClick={() => void handleGoBack()}
+                      iconLeft={<ChevronLeft className="h-4 w-4" />}
+                    >
+                      Revenir en arrière
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="secondary"
+                      size="lg"
+                      disabled={saving}
+                      iconLeft={<Sparkles className="h-4 w-4" />}
+                    >
+                      Ajouter ce soin
+                    </Button>
+                  </div>
                   <Button
                     type="button"
                     size="lg"
@@ -919,14 +1159,26 @@ export default function WelcomePage() {
               />
 
               <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  size="lg"
-                  disabled={saving}
-                  iconRight={<ChevronRight className="h-4 w-4" />}
-                >
-                  Enregistrer et continuer
-                </Button>
+                <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:w-full">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="lg"
+                    disabled={saving}
+                    onClick={() => void handleGoBack()}
+                    iconLeft={<ChevronLeft className="h-4 w-4" />}
+                  >
+                    Revenir en arrière
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="lg"
+                    disabled={saving}
+                    iconRight={<ChevronRight className="h-4 w-4" />}
+                  >
+                    Enregistrer et continuer
+                  </Button>
+                </div>
               </div>
             </form>
           </Card>
@@ -1027,15 +1279,27 @@ export default function WelcomePage() {
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-                  <Button
-                    type="submit"
-                    variant="secondary"
-                    size="lg"
-                    disabled={saving}
-                    iconLeft={<CalendarPlus2 className="h-4 w-4" />}
-                  >
-                    Ajouter ce créneau
-                  </Button>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="lg"
+                      disabled={saving}
+                      onClick={() => void handleGoBack()}
+                      iconLeft={<ChevronLeft className="h-4 w-4" />}
+                    >
+                      Revenir en arrière
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="secondary"
+                      size="lg"
+                      disabled={saving}
+                      iconLeft={<CalendarPlus2 className="h-4 w-4" />}
+                    >
+                      Ajouter ce créneau
+                    </Button>
+                  </div>
                   <Button
                     type="button"
                     size="lg"
@@ -1112,6 +1376,15 @@ export default function WelcomePage() {
               </div>
 
               <div className="mt-8 flex flex-col gap-3">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  disabled={saving}
+                  onClick={() => void handleGoBack()}
+                  iconLeft={<ChevronLeft className="h-4 w-4" />}
+                >
+                  Revenir en arrière
+                </Button>
                 <Button
                   size="lg"
                   disabled={saving}

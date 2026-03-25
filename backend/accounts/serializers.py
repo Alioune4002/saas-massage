@@ -71,6 +71,7 @@ class LoginSerializer(serializers.Serializer):
 class RegisterPractitionerSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
+    business_name = serializers.CharField(max_length=160)
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirmation = serializers.CharField(write_only=True, min_length=8)
@@ -92,6 +93,7 @@ class RegisterPractitionerSerializer(serializers.Serializer):
     def create(self, validated_data):
         first_name = validated_data["first_name"].strip()
         last_name = validated_data["last_name"].strip()
+        business_name = validated_data["business_name"].strip()
         email = validated_data["email"]
         password = validated_data["password"]
 
@@ -107,8 +109,11 @@ class RegisterPractitionerSerializer(serializers.Serializer):
             role=User.Role.PROFESSIONAL,
         )
 
-        business_name = " ".join(part for part in [first_name, last_name] if part).strip()
-        business_name = business_name or "Mon espace praticien"
+        business_name = (
+            business_name
+            or " ".join(part for part in [first_name, last_name] if part).strip()
+            or "Mon espace praticien"
+        )
         slug = self._build_unique_slug(slugify(business_name) or username)
 
         profile = ProfessionalProfile.objects.create(

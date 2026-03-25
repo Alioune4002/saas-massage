@@ -21,6 +21,7 @@ export default function RegisterPage() {
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
+    business_name: "",
     email: "",
     password: "",
     password_confirmation: "",
@@ -170,6 +171,21 @@ export default function RegisterPage() {
                         email: event.target.value,
                       }))
                     }
+                    required
+                  />
+                </FieldWrapper>
+
+                <FieldWrapper label="Nom de votre entreprise ou de votre activité">
+                  <Input
+                    autoComplete="organization"
+                    value={form.business_name}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        business_name: event.target.value,
+                      }))
+                    }
+                    placeholder="Ex. Atelier Nuadyx Massage"
                     required
                   />
                 </FieldWrapper>

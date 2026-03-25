@@ -36,6 +36,7 @@ import {
 
 export default function PublicProfileSettingsPage() {
   const [profile, setProfile] = useState<DashboardProfile | null>(null);
+  const [services, setServices] = useState<PublicService[]>([]);
   const [draft, setDraft] = useState<PublicProfileDraft | null>(null);
   const [defaultDraft, setDefaultDraft] = useState<PublicProfileDraft | null>(null);
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
@@ -76,6 +77,7 @@ export default function PublicProfileSettingsPage() {
           publicServices
         );
         setProfile(profileData);
+        setServices(publicServices);
         setDefaultDraft(defaultDraft);
         setDraft(defaultDraft);
         setError("");
@@ -145,6 +147,9 @@ export default function PublicProfileSettingsPage() {
       const payload = new FormData();
       payload.append("business_name", draft.displayName);
       payload.append("slug", draft.slug);
+      payload.append("owner_first_name", profile.owner_first_name);
+      payload.append("owner_last_name", profile.owner_last_name);
+      payload.append("login_email", profile.login_email);
       payload.append("activity_type", draft.activityType);
       payload.append("practice_mode", draft.practiceMode);
       payload.append("city", draft.city);
@@ -195,7 +200,7 @@ export default function PublicProfileSettingsPage() {
       }
 
       const updatedProfile = await updateDashboardProfile(payload);
-      const nextDraft = createDefaultPublicProfileDraft(updatedProfile, []);
+      const nextDraft = createDefaultPublicProfileDraft(updatedProfile, services);
 
       setProfile(updatedProfile);
       setDefaultDraft(nextDraft);
@@ -278,6 +283,57 @@ export default function PublicProfileSettingsPage() {
 
       <div className="grid gap-4 xl:grid-cols-[1.02fr_0.98fr]">
         <div className="space-y-4">
+          <Card>
+            <CardHeader
+              title="Informations du compte"
+              subtitle="Modifie ici le nom du titulaire du compte et l’email de connexion utilisé pour accéder à ton espace."
+            />
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <FieldWrapper label="Prénom du titulaire">
+                <Input
+                  value={profile.owner_first_name}
+                  onChange={(event) =>
+                    setProfile((current) =>
+                      current
+                        ? { ...current, owner_first_name: event.target.value }
+                        : current
+                    )
+                  }
+                />
+              </FieldWrapper>
+
+              <FieldWrapper label="Nom du titulaire">
+                <Input
+                  value={profile.owner_last_name}
+                  onChange={(event) =>
+                    setProfile((current) =>
+                      current
+                        ? { ...current, owner_last_name: event.target.value }
+                        : current
+                    )
+                  }
+                />
+              </FieldWrapper>
+
+              <div className="md:col-span-2">
+                <FieldWrapper label="Email de connexion">
+                  <Input
+                    type="email"
+                    value={profile.login_email}
+                    onChange={(event) =>
+                      setProfile((current) =>
+                        current
+                          ? { ...current, login_email: event.target.value }
+                          : current
+                      )
+                    }
+                  />
+                </FieldWrapper>
+              </div>
+            </div>
+          </Card>
+
           <Card>
             <CardHeader
               title="L’essentiel visible"

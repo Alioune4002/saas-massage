@@ -15,6 +15,7 @@ class RegistrationTests(APITestCase):
             {
                 "first_name": "Sam",
                 "last_name": "Brest",
+                "business_name": "Cabinet Sam Brest",
                 "email": "sam@example.com",
                 "password": "secret1234",
                 "password_confirmation": "secret1234",
@@ -28,7 +29,8 @@ class RegistrationTests(APITestCase):
         user = User.objects.get(email="sam@example.com")
         profile = ProfessionalProfile.objects.get(user=user)
 
-        self.assertEqual(profile.business_name, "Sam Brest")
+        self.assertEqual(profile.business_name, "Cabinet Sam Brest")
+        self.assertEqual(profile.slug, "cabinet-sam-brest")
         self.assertFalse(profile.onboarding_completed)
         self.assertEqual(profile.onboarding_step, ProfessionalProfile.OnboardingStep.WELCOME)
         self.assertFalse(profile.is_public)
@@ -42,6 +44,7 @@ class RegistrationTests(APITestCase):
             {
                 "first_name": "Sam",
                 "last_name": "Brest",
+                "business_name": "Cabinet Sam Brest",
                 "email": "sam2@example.com",
                 "password": "secret1234",
                 "password_confirmation": "other1234",

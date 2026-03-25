@@ -1,8 +1,17 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { NuadyxLogo } from "@/components/brand/nuadyx-logo";
 
 export function SiteFooter() {
+  const pathname = usePathname();
+
+  if (pathname !== "/") {
+    return null;
+  }
+
   return (
     <footer className="border-t border-[var(--border)] bg-[var(--background-soft)] px-4 py-10 text-[var(--foreground)] md:px-6">
       <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1.2fr_0.8fr]">

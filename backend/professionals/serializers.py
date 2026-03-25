@@ -139,6 +139,13 @@ class PublicProfessionalSerializer(serializers.ModelSerializer):
 
 
 class ProfessionalDashboardSerializer(serializers.ModelSerializer):
+    owner_first_name = serializers.CharField(
+        source="user.first_name", required=False, allow_blank=True
+    )
+    owner_last_name = serializers.CharField(
+        source="user.last_name", required=False, allow_blank=True
+    )
+    login_email = serializers.EmailField(source="user.email", required=False)
     profile_photo = serializers.FileField(write_only=True, required=False, allow_null=True)
     cover_photo = serializers.FileField(write_only=True, required=False, allow_null=True)
     profile_photo_url = serializers.SerializerMethodField(read_only=True)
@@ -153,6 +160,9 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
             "id",
             "business_name",
             "slug",
+            "owner_first_name",
+            "owner_last_name",
+            "login_email",
             "activity_type",
             "practice_mode",
             "city",
@@ -221,6 +231,24 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Ce lien public est déjà utilisé.")
         return value
 
+    def validate_login_email(self, value: str):
+        normalized = value.strip().lower()
+        queryset = self.instance.user.__class__.objects.exclude(
+            pk=self.instance.user_id if self.instance else None
+        )
+        if queryset.filter(email=normalized).exists():
+            raise serializers.ValidationError(
+                "Un compte existe déjà avec cette adresse email."
+            )
+        return normalized
+
+    def validate_public_headline(self, value: str):
+        if len(value) > 180:
+            raise serializers.ValidationError(
+                "La phrase courte doit contenir 180 caractères maximum."
+            )
+        return value
+
     def validate_specialties(self, value):
         if not isinstance(value, list):
             raise serializers.ValidationError("Les spécialités doivent être une liste.")
@@ -262,10 +290,16 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
         return value
 
     def update(self, instance, validated_data):
+        user_data = validated_data.pop("user", {})
         profile_photo = validated_data.pop("profile_photo", None)
         cover_photo = validated_data.pop("cover_photo", None)
         remove_profile_photo = validated_data.pop("remove_profile_photo", False)
         remove_cover_photo = validated_data.pop("remove_cover_photo", False)
+
+        if user_data:
+            for field, value in user_data.items():
+                setattr(instance.user, field, value)
+            instance.user.save(update_fields=list(user_data.keys()))
 
         if remove_profile_photo and instance.profile_photo:
             instance.profile_photo.delete(save=False)

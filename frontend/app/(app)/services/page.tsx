@@ -14,6 +14,23 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { createService, getServices, type CreateServicePayload, type Service } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
+type ServiceVariantForm = {
+  id: string;
+  duration_minutes: number;
+  price_eur: string;
+};
+
+function buildServiceVariant(
+  duration_minutes = 60,
+  price_eur = "95.00"
+): ServiceVariantForm {
+  return {
+    id: crypto.randomUUID(),
+    duration_minutes,
+    price_eur,
+  };
+}
+
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +46,9 @@ export default function ServicesPage() {
     is_active: true,
     sort_order: 0,
   });
+  const [variants, setVariants] = useState<ServiceVariantForm[]>([
+    buildServiceVariant(),
+  ]);
 
   async function load() {
     try {
@@ -55,7 +75,16 @@ export default function ServicesPage() {
 
     try {
       setSubmitting(true);
-      await createService(form);
+      await Promise.all(
+        variants.map((variant, index) =>
+          createService({
+            ...form,
+            duration_minutes: variant.duration_minutes,
+            price_eur: variant.price_eur,
+            sort_order: services.length + index + 1,
+          })
+        )
+      );
       setForm({
         title: "",
         short_description: "",
@@ -65,7 +94,8 @@ export default function ServicesPage() {
         is_active: true,
         sort_order: services.length + 1,
       });
-      setSuccess("Service ajouté avec succès.");
+      setVariants([buildServiceVariant()]);
+      setSuccess("Prestation ajoutée avec ses différentes durées.");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Création impossible.");
@@ -142,35 +172,90 @@ export default function ServicesPage() {
               </FieldWrapper>
             </div>
 
-            <FieldWrapper label="Durée (minutes)">
-              <Input
-                type="number"
-                min={15}
-                step={15}
-                value={form.duration_minutes}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    duration_minutes: Number(event.target.value || 0),
-                  }))
-                }
-              />
-            </FieldWrapper>
+            <div className="md:col-span-2 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-[var(--foreground)]">
+                    Durées et tarifs
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--foreground-muted)]">
+                    Tu peux proposer plusieurs formats pour une même prestation.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setVariants((current) => [...current, buildServiceVariant()])
+                  }
+                >
+                  Ajouter une durée
+                </Button>
+              </div>
 
-            <FieldWrapper label="Prix TTC">
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.price_eur}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    price_eur: event.target.value,
-                  }))
-                }
-              />
-            </FieldWrapper>
+              {variants.map((variant, index) => (
+                <div
+                  key={variant.id}
+                  className="grid gap-4 rounded-[1.4rem] border border-[var(--border)] bg-[var(--background-soft)] p-4 md:grid-cols-[1fr_1fr_auto]"
+                >
+                  <FieldWrapper label={`Durée ${index + 1}`}>
+                    <Input
+                      type="number"
+                      min={15}
+                      step={15}
+                      value={variant.duration_minutes}
+                      onChange={(event) =>
+                        setVariants((current) =>
+                          current.map((item) =>
+                            item.id === variant.id
+                              ? {
+                                  ...item,
+                                  duration_minutes: Number(event.target.value || 0),
+                                }
+                              : item
+                          )
+                        )
+                      }
+                    />
+                  </FieldWrapper>
+
+                  <FieldWrapper label="Prix TTC">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={variant.price_eur}
+                      onChange={(event) =>
+                        setVariants((current) =>
+                          current.map((item) =>
+                            item.id === variant.id
+                              ? { ...item, price_eur: event.target.value }
+                              : item
+                          )
+                        )
+                      }
+                    />
+                  </FieldWrapper>
+
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={variants.length === 1}
+                      onClick={() =>
+                        setVariants((current) =>
+                          current.filter((item) => item.id !== variant.id)
+                        )
+                      }
+                    >
+                      Retirer
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
 
             <div className="md:col-span-2">
               <FieldWrapper label="Description complète">

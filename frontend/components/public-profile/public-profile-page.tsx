@@ -28,10 +28,14 @@ import {
   ApiError,
   askPublicAssistant,
   createPublicBooking,
+  getAssistantProfile,
+  getAvailabilities,
+  getDashboardProfile,
   getPublicAvailabilities,
   getPublicAssistant,
   getPublicProfessional,
   getPublicServices,
+  getServices,
   type AssistantReply,
   type PublicBookingCreated,
   type CreatePublicBookingPayload,
@@ -40,6 +44,7 @@ import {
   type PublicProfessional,
   type PublicService,
 } from "@/lib/api";
+import { getStoredUser } from "@/lib/auth";
 import { PublicAssistantCard } from "@/components/public-profile/public-assistant-card";
 import { PublicBookingCard } from "@/components/public-profile/public-booking-card";
 import { buildPublicPaymentPreview } from "@/lib/payments";
@@ -58,6 +63,53 @@ import {
   getInitials,
 } from "@/lib/utils";
 
+function buildPreviewProfessional(
+  profile: Awaited<ReturnType<typeof getDashboardProfile>>,
+  assistant: Awaited<ReturnType<typeof getAssistantProfile>>
+): PublicProfessional {
+  return {
+    id: profile.id,
+    business_name: profile.business_name,
+    slug: profile.slug,
+    activity_type: profile.activity_type,
+    practice_mode: profile.practice_mode,
+    city: profile.city,
+    service_area: profile.service_area,
+    venue_details: profile.venue_details,
+    access_details: profile.access_details,
+    ambience_details: profile.ambience_details,
+    equipment_provided: profile.equipment_provided,
+    client_preparation: profile.client_preparation,
+    ideal_for: profile.ideal_for,
+    highlight_points: profile.highlight_points,
+    bio: profile.bio,
+    public_headline: profile.public_headline,
+    specialties: profile.specialties,
+    visual_theme: profile.visual_theme,
+    phone: profile.phone,
+    public_email: profile.public_email,
+    accepts_online_booking: false,
+    reservation_payment_mode: profile.reservation_payment_mode,
+    deposit_value_type: profile.deposit_value_type,
+    deposit_value: profile.deposit_value,
+    free_cancellation_notice_hours: profile.free_cancellation_notice_hours,
+    keep_payment_after_deadline: profile.keep_payment_after_deadline,
+    payment_message: profile.payment_message,
+    payment_account: profile.payment_account,
+    profile_photo_url: profile.profile_photo_url,
+    cover_photo_url: profile.cover_photo_url,
+    practice_information: assistant.practice_information,
+    before_session: assistant.before_session,
+    after_session: assistant.after_session,
+    booking_policy: assistant.booking_policy,
+    contact_information: assistant.contact_information,
+    faq_items: assistant.faq_items,
+    reviews: [],
+    review_average: null,
+    review_count: 0,
+  };
+}
+
 type PublicProfilePageProps = {
   slug: string;
 };
@@ -69,6 +121,7 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
   const [slots, setSlots] = useState<PublicAvailability[]>([]);
   const [assistant, setAssistant] = useState<PublicAssistant | null>(null);
   const [draft, setDraft] = useState<PublicProfileDraft | null>(null);
+  const [previewMode, setPreviewMode] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedSlotId, setSelectedSlotId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -137,17 +190,93 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
             "Posez une question pour obtenir une réponse sur les prestations, la réservation ou le déroulé d’une séance.",
           cautious: false,
         });
+        setPreviewMode(false);
         setError("");
       } catch (err) {
         if (!active) {
           return;
         }
+        const storedUser = getStoredUser();
+        const canPreviewOwnProfile =
+          storedUser?.professional_slug === slug && Boolean(storedUser);
 
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Profil public introuvable."
-        );
+        if (
+          canPreviewOwnProfile &&
+          err instanceof ApiError &&
+          (err.status === 403 || err.status === 404)
+        ) {
+          try {
+            const [
+              profileData,
+              servicesData,
+              availabilitiesData,
+              assistantData,
+            ] = await Promise.all([
+              getDashboardProfile(),
+              getServices(),
+              getAvailabilities(),
+              getAssistantProfile(),
+            ]);
+
+            if (!active) {
+              return;
+            }
+
+            const previewProfile = buildPreviewProfessional(
+              profileData,
+              assistantData
+            );
+            const previewServices: PublicService[] = servicesData.map((service) => ({
+              id: service.id,
+              professional_slug: profileData.slug,
+              professional_name: profileData.business_name,
+              title: service.title,
+              short_description: service.short_description,
+              full_description: service.full_description,
+              duration_minutes: service.duration_minutes,
+              price_eur: service.price_eur,
+            }));
+            const previewSlots: PublicAvailability[] = availabilitiesData
+              .filter((slot) => slot.slot_type === "open" && slot.is_active)
+              .map((slot) => ({
+                id: slot.id,
+                start_at: slot.start_at,
+                end_at: slot.end_at,
+                service: slot.service,
+                service_title: slot.service_title,
+              }));
+
+            setProfile(previewProfile);
+            setServices(previewServices);
+            setSlots(previewSlots);
+            setAssistant({
+              assistant_enabled: assistantData.assistant_enabled,
+              public_assistant_enabled: assistantData.public_assistant_enabled,
+              welcome_message: assistantData.welcome_message,
+              response_tone: assistantData.response_tone,
+              starter_questions: [
+                "Quels soins sont déjà prêts à être réservés ?",
+                "Comment va apparaître ma page côté client ?",
+              ],
+            });
+            setDraft(
+              createDefaultPublicProfileDraft(previewProfile, previewServices)
+            );
+            setSelectedServiceId(previewServices[0]?.id ?? "");
+            setPreviewMode(true);
+            setError("");
+            return;
+          } catch (previewError) {
+            setError(
+              previewError instanceof Error
+                ? previewError.message
+                : "Impossible d’ouvrir l’aperçu privé du profil."
+            );
+            return;
+          }
+        }
+
+        setError(err instanceof Error ? err.message : "Profil public introuvable.");
       } finally {
         if (active) {
           setLoading(false);
@@ -258,6 +387,13 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
     return (
       <main className="min-h-screen px-4 py-5 md:px-6">
         <div className="mx-auto max-w-7xl space-y-5">
+          {previewMode ? (
+            <Notice tone="info">
+              Vous visualisez un aperçu privé de votre page. La réservation
+              réelle et la visibilité publique seront actives dès que votre
+              profil sera publié.
+            </Notice>
+          ) : null}
           <Skeleton className="h-18 rounded-[1.8rem]" />
           <Skeleton className="h-80 rounded-[2rem]" />
           <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -355,7 +491,15 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
 
   return (
     <main className="min-h-screen px-4 py-4 md:px-6">
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-7xl space-y-4">
+        {previewMode ? (
+          <Notice tone="info">
+            Vous visualisez un aperçu privé de votre page. La réservation réelle
+            et la visibilité publique seront actives dès que votre profil sera
+            publié.
+          </Notice>
+        ) : null}
+
         <header className="glass-panel rounded-[1.8rem] px-4 py-3 md:px-5">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
