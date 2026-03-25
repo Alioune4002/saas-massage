@@ -82,24 +82,22 @@ export default function LoginPage() {
             </div>
             <div className="max-w-xl">
               <p className="text-sm uppercase tracking-[0.34em] text-[var(--primary)]/80">
-                Plateforme praticien
+                Espace praticien
               </p>
               <h1 className="mt-6 text-balance text-5xl font-semibold leading-[1.05] tracking-tight text-[var(--foreground)]">
-                La couche premium pour gérer une activité de massage comme un
-                vrai service en ligne.
+                Un espace clair pour gérer votre page praticien et vos demandes.
               </h1>
               <p className="mt-6 max-w-lg text-lg leading-8 text-[var(--foreground-muted)]">
-                Planning, services, réservations et prochaines briques produit
-                réunis dans une interface crédible, respirante et pensée pour
-                être vendue.
+                Prestations, créneaux, réservations et profil public réunis dans
+                un espace pensé pour les praticiens du massage et du bien-être.
               </p>
             </div>
 
             <div className="mt-10 grid gap-4 sm:grid-cols-3">
               {[
-                "Image haut de gamme",
+                "Page praticien partageable",
                 "UX mobile-first",
-                "Base prête pour la suite",
+                "Demandes organisées",
               ].map((item) => (
                 <div
                   key={item}

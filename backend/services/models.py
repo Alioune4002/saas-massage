@@ -7,6 +7,20 @@ from common.models import TimeStampedUUIDModel
 from professionals.models import ProfessionalProfile
 
 
+SERVICE_CATEGORY_CHOICES = (
+    ("", "Non précisée"),
+    ("relaxant", "Massage relaxant"),
+    ("deep_tissue", "Deep tissue"),
+    ("tantrique", "Tantrique"),
+)
+
+SERVICE_CATEGORY_KEYWORDS = {
+    "relaxant": ("relaxant", "relaxation", "detente", "détente", "californien"),
+    "deep_tissue": ("deep tissue", "deep-tissue", "musculaire", "sportif", "tissus profonds"),
+    "tantrique": ("tantrique", "tantra"),
+}
+
+
 class MassageService(TimeStampedUUIDModel):
     professional = models.ForeignKey(
         ProfessionalProfile,
@@ -16,6 +30,13 @@ class MassageService(TimeStampedUUIDModel):
     title = models.CharField("titre", max_length=160)
     short_description = models.CharField("description courte", max_length=255)
     full_description = models.TextField("description complète", blank=True)
+    service_category = models.CharField(
+        "catégorie principale",
+        max_length=30,
+        choices=SERVICE_CATEGORY_CHOICES,
+        blank=True,
+        default="",
+    )
     duration_minutes = models.PositiveIntegerField("durée (minutes)")
     price_eur = models.DecimalField(
         "prix (€)",

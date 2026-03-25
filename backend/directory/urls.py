@@ -1,0 +1,44 @@
+from django.urls import path
+
+from .views import (
+    AdminContactCampaignCreateView,
+    AdminContactCampaignSendView,
+    AdminImportedProfilesBulkActionView,
+    AdminImportedProfilesView,
+    AdminImportJobDetailView,
+    AdminImportJobsView,
+    AdminRemovalRequestsView,
+    AdminSourceDetailView,
+    AdminSourceRunImportView,
+    AdminSourcesView,
+    MeClaimStatusView,
+    MeCompleteProfileFromImportView,
+    PublicClaimCompleteOnboardingView,
+    PublicClaimRequestView,
+    PublicClaimVerifyView,
+    PublicDirectoryListingsView,
+    PublicPractitionerDetailView,
+    PublicRemovalRequestView,
+)
+
+
+urlpatterns = [
+    path("admin/sources", AdminSourcesView.as_view(), name="admin-sources"),
+    path("admin/sources/<uuid:pk>", AdminSourceDetailView.as_view(), name="admin-source-detail"),
+    path("admin/sources/<uuid:pk>/run-import", AdminSourceRunImportView.as_view(), name="admin-source-run-import"),
+    path("admin/import-jobs", AdminImportJobsView.as_view(), name="admin-import-jobs"),
+    path("admin/import-jobs/<uuid:pk>", AdminImportJobDetailView.as_view(), name="admin-import-job-detail"),
+    path("admin/imported-profiles", AdminImportedProfilesView.as_view(), name="admin-imported-profiles"),
+    path("admin/imported-profiles/bulk-action", AdminImportedProfilesBulkActionView.as_view(), name="admin-imported-profiles-bulk-action"),
+    path("admin/contact-campaigns", AdminContactCampaignCreateView.as_view(), name="admin-contact-campaigns"),
+    path("admin/contact-campaigns/<uuid:pk>/send", AdminContactCampaignSendView.as_view(), name="admin-contact-campaign-send"),
+    path("admin/removal-requests", AdminRemovalRequestsView.as_view(), name="admin-removal-requests"),
+    path("public/practitioners/<slug:slug>", PublicPractitionerDetailView.as_view(), name="public-practitioner-detail-unified"),
+    path("public/imported-profiles/<uuid:pk>/request-claim", PublicClaimRequestView.as_view(), name="public-imported-profile-request-claim"),
+    path("public/removal-request", PublicRemovalRequestView.as_view(), name="public-removal-request"),
+    path("public/claim/verify", PublicClaimVerifyView.as_view(), name="public-claim-verify"),
+    path("public/claim/complete-onboarding", PublicClaimCompleteOnboardingView.as_view(), name="public-claim-complete-onboarding"),
+    path("public/directory-listings", PublicDirectoryListingsView.as_view(), name="public-directory-listings-v2"),
+    path("me/claim-status", MeClaimStatusView.as_view(), name="me-claim-status"),
+    path("me/complete-profile-from-import", MeCompleteProfileFromImportView.as_view(), name="me-complete-profile-from-import"),
+]

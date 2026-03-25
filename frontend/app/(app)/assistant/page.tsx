@@ -576,9 +576,9 @@ export default function AssistantPage() {
                       Prêt pour la suite
                     </p>
                     <p className="mt-2 text-sm leading-6 text-[var(--foreground-muted)]">
-                      L’architecture est prête pour brancher plus tard un moteur
-                      plus avancé, un historique, des statistiques et des offres
-                      premium.
+                      L’assistant peut encore être enrichi plus tard avec plus
+                      d’historique, de statistiques et d’outils de support, sans
+                      changer son cadre métier.
                     </p>
                   </div>
                 </div>

@@ -18,17 +18,17 @@ export function SiteHeader() {
         </Link>
 
         <nav className="hidden items-center gap-6 text-sm text-[var(--foreground-muted)] lg:flex">
-          <Link href="/praticiens" className="hover:text-[var(--foreground)]">
-            Praticiens
+          <Link href="/annuaire" className="hover:text-[var(--foreground)]">
+            Trouver un praticien
           </Link>
-          <a href="#benefices" className="hover:text-[var(--foreground)]">
-            Fonctionnalités
+          <a href="#pourquoi-rejoindre" className="hover:text-[var(--foreground)]">
+            Pourquoi rejoindre NUADYX
           </a>
-          <a href="#pour-qui" className="hover:text-[var(--foreground)]">
-            Pour qui
+          <a href="#lancement" className="hover:text-[var(--foreground)]">
+            Rejoindre l’annuaire
           </a>
-          <a href="#pricing" className="hover:text-[var(--foreground)]">
-            Tarification
+          <a href="#lancement" className="hover:text-[var(--foreground)]">
+            Gratuit pendant le lancement
           </a>
         </nav>
 
@@ -36,7 +36,7 @@ export function SiteHeader() {
           <ThemeToggle compact />
           <Link href="/inscription" className="hidden md:inline-flex">
             <Button size="md" className="whitespace-nowrap">
-              Créer mon espace
+              Créer ma page praticien
             </Button>
           </Link>
           <Link href="/login">

@@ -1,6 +1,12 @@
 from django.contrib import admin
+from django.conf import settings
 
+from common.communications import send_claim_profile_invitation_email
 from .models import (
+    DirectoryInterestLead,
+    DirectoryProfileCandidate,
+    DirectoryProfileClaimRequest,
+    DirectoryProfileRemovalRequest,
     PractitionerVerification,
     PractitionerVerificationDecision,
     ProfessionalPaymentAccount,
@@ -90,3 +96,57 @@ class PractitionerVerificationAdmin(admin.ModelAdmin):
                 to_status=obj.status,
                 reason=obj.rejection_reason or "",
             )
+
+
+@admin.register(DirectoryProfileCandidate)
+class DirectoryProfileCandidateAdmin(admin.ModelAdmin):
+    list_display = ("business_name", "status", "city", "source_label", "imported_at", "claimed_at")
+    list_filter = ("status", "city", "source_label")
+    search_fields = ("business_name", "slug", "city", "public_email", "source_url")
+    readonly_fields = (
+        "imported_at",
+        "published_at",
+        "claim_token",
+        "claimed_at",
+        "removal_requested_at",
+        "created_at",
+        "updated_at",
+    )
+    actions = ("send_invitation_email",)
+
+    @admin.action(description="Envoyer l’invitation honnête à revendiquer la fiche")
+    def send_invitation_email(self, request, queryset):
+        sent = 0
+        for candidate in queryset:
+            if not candidate.public_email:
+                continue
+            activation_url = (
+                f"{settings.FRONTEND_APP_URL}/fiches/{candidate.slug}?claim={candidate.claim_token}"
+            )
+            send_claim_profile_invitation_email(candidate, activation_url)
+            sent += 1
+        self.message_user(request, f"{sent} invitation(s) envoyée(s).")
+
+
+@admin.register(DirectoryProfileClaimRequest)
+class DirectoryProfileClaimRequestAdmin(admin.ModelAdmin):
+    list_display = ("candidate", "claimant_email", "status", "created_at", "reviewed_at")
+    list_filter = ("status",)
+    search_fields = ("candidate__business_name", "claimant_email", "claimant_name")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(DirectoryProfileRemovalRequest)
+class DirectoryProfileRemovalRequestAdmin(admin.ModelAdmin):
+    list_display = ("candidate", "requester_email", "status", "created_at", "reviewed_at")
+    list_filter = ("status",)
+    search_fields = ("candidate__business_name", "requester_email", "requester_name")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(DirectoryInterestLead)
+class DirectoryInterestLeadAdmin(admin.ModelAdmin):
+    list_display = ("kind", "full_name", "email", "city", "processed", "created_at")
+    list_filter = ("kind", "processed", "city")
+    search_fields = ("full_name", "email", "practitioner_name", "city")
+    readonly_fields = ("created_at", "updated_at")

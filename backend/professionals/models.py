@@ -113,6 +113,19 @@ class ProfessionalProfile(TimeStampedUUIDModel):
         FIXED = "fixed", "Montant fixe"
         PERCENTAGE = "percentage", "Pourcentage"
 
+    class VerificationBadgeStatus(models.TextChoices):
+        NONE = "none", "Aucun"
+        PENDING = "pending", "En attente"
+        VERIFIED = "verified", "Vérifié"
+        SUSPENDED = "suspended", "Suspendu"
+        EXPIRED = "expired", "Expiré"
+
+    class AcquisitionSource(models.TextChoices):
+        DIRECT_SIGNUP = "direct_signup", "Inscription directe"
+        IMPORTED_CLAIMED = "imported_claimed", "Fiche importée revendiquée"
+        ADMIN_CREATED = "admin_created", "Créé par admin"
+        REFERRAL = "referral", "Par recommandation"
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -156,6 +169,29 @@ class ProfessionalProfile(TimeStampedUUIDModel):
     )
     phone = models.CharField("téléphone", max_length=30, blank=True)
     public_email = models.EmailField("email public", blank=True)
+    imported_profile_origin = models.ForeignKey(
+        "directory.ImportedProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="claimed_professional_profiles",
+    )
+    profile_claimed_from_import = models.BooleanField(
+        "profil revendiqué depuis import",
+        default=False,
+    )
+    verification_badge_status = models.CharField(
+        "statut du badge public",
+        max_length=20,
+        choices=VerificationBadgeStatus.choices,
+        default=VerificationBadgeStatus.NONE,
+    )
+    acquisition_source = models.CharField(
+        "source d'acquisition",
+        max_length=20,
+        choices=AcquisitionSource.choices,
+        default=AcquisitionSource.DIRECT_SIGNUP,
+    )
     is_public = models.BooleanField("profil public", default=True)
     accepts_online_booking = models.BooleanField("réservation en ligne active", default=True)
     reservation_payment_mode = models.CharField(
@@ -397,3 +433,183 @@ class PractitionerVerificationDecision(TimeStampedUUIDModel):
 
     def __str__(self) -> str:
         return f"{self.verification.professional.business_name} → {self.to_status}"
+
+
+class DirectoryProfileCandidate(TimeStampedUUIDModel):
+    class Status(models.TextChoices):
+        DRAFT_IMPORTED = "draft_imported", "Brouillon importé"
+        PENDING_REVIEW = "pending_review", "En revue"
+        PUBLISHED_UNCLAIMED = "published_unclaimed", "Publié non revendiqué"
+        CLAIMED = "claimed", "Revendiqué"
+        REMOVED = "removed", "Retiré"
+
+    linked_professional = models.OneToOneField(
+        ProfessionalProfile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="directory_candidate",
+    )
+    status = models.CharField(
+        "statut de fiche",
+        max_length=30,
+        choices=Status.choices,
+        default=Status.DRAFT_IMPORTED,
+    )
+    business_name = models.CharField("nom affiché", max_length=160)
+    slug = models.SlugField(
+        "slug public",
+        unique=True,
+        validators=[slug_validator, validate_public_slug],
+    )
+    city = models.CharField("ville", max_length=120, blank=True)
+    service_area = models.CharField("zone desservie", max_length=180, blank=True)
+    public_headline = models.CharField("accroche publique", max_length=180, blank=True)
+    bio = models.TextField("présentation", blank=True)
+    specialties = models.JSONField("spécialités", default=list, blank=True)
+    massage_categories = models.JSONField("catégories massage", default=list, blank=True)
+    public_email = models.EmailField("email public", blank=True)
+    phone = models.CharField("téléphone public", max_length=30, blank=True)
+    source_label = models.CharField("source", max_length=120, blank=True)
+    source_url = models.URLField("source_url", blank=True)
+    source_payload = models.JSONField("payload source", default=dict, blank=True)
+    imported_at = models.DateTimeField("importé le", default=timezone.now)
+    published_at = models.DateTimeField("publié le", null=True, blank=True)
+    claim_token = models.CharField("claim_token", max_length=64, unique=True, editable=False)
+    claimed_at = models.DateTimeField("revendiqué le", null=True, blank=True)
+    removal_requested_at = models.DateTimeField("suppression demandée le", null=True, blank=True)
+    internal_notes = models.TextField("notes internes", blank=True)
+
+    class Meta:
+        verbose_name = "fiche candidate annuaire"
+        verbose_name_plural = "fiches candidates annuaire"
+        ordering = ("business_name",)
+
+    def __str__(self) -> str:
+        return self.business_name
+
+    def clean(self):
+        super().clean()
+        if not isinstance(self.specialties, list):
+            raise ValidationError({"specialties": "Les spécialités doivent être une liste."})
+        if not isinstance(self.massage_categories, list):
+            raise ValidationError({"massage_categories": "Les catégories doivent être une liste."})
+        self.specialties = [str(item).strip() for item in self.specialties if str(item).strip()][:8]
+        self.massage_categories = [
+            str(item).strip() for item in self.massage_categories if str(item).strip()
+        ][:6]
+
+    def save(self, *args, **kwargs):
+        if not self.claim_token:
+            self.claim_token = uuid4().hex
+        if self.status == self.Status.PUBLISHED_UNCLAIMED and not self.published_at:
+            self.published_at = timezone.now()
+        if self.status == self.Status.CLAIMED and not self.claimed_at:
+            self.claimed_at = timezone.now()
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    @property
+    def is_publicly_visible(self) -> bool:
+        return self.status == self.Status.PUBLISHED_UNCLAIMED
+
+
+class DirectoryProfileClaimRequest(TimeStampedUUIDModel):
+    class Status(models.TextChoices):
+        PENDING = "pending", "En attente"
+        APPROVED = "approved", "Approuvée"
+        REJECTED = "rejected", "Refusée"
+
+    candidate = models.ForeignKey(
+        DirectoryProfileCandidate,
+        on_delete=models.CASCADE,
+        related_name="claim_requests",
+    )
+    claimant_name = models.CharField("nom du demandeur", max_length=160)
+    claimant_email = models.EmailField("email du demandeur")
+    claimant_phone = models.CharField("téléphone du demandeur", max_length=30, blank=True)
+    message = models.TextField("message", blank=True)
+    status = models.CharField(
+        "statut",
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    reviewed_at = models.DateTimeField("traité le", null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="directory_claim_reviews",
+    )
+    review_notes = models.TextField("notes de traitement", blank=True)
+
+    class Meta:
+        verbose_name = "demande de revendication"
+        verbose_name_plural = "demandes de revendication"
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.candidate.business_name} — {self.claimant_email}"
+
+
+class DirectoryProfileRemovalRequest(TimeStampedUUIDModel):
+    class Status(models.TextChoices):
+        PENDING = "pending", "En attente"
+        COMPLETED = "completed", "Traitée"
+
+    candidate = models.ForeignKey(
+        DirectoryProfileCandidate,
+        on_delete=models.CASCADE,
+        related_name="removal_requests",
+    )
+    requester_name = models.CharField("nom du demandeur", max_length=160)
+    requester_email = models.EmailField("email du demandeur")
+    reason = models.TextField("motif", blank=True)
+    status = models.CharField(
+        "statut",
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    reviewed_at = models.DateTimeField("traité le", null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="directory_removal_reviews",
+    )
+
+    class Meta:
+        verbose_name = "demande de suppression de fiche"
+        verbose_name_plural = "demandes de suppression de fiche"
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"Suppression {self.candidate.business_name} — {self.requester_email}"
+
+
+class DirectoryInterestLead(TimeStampedUUIDModel):
+    class Kind(models.TextChoices):
+        SUGGEST_PRACTITIONER = "suggest_practitioner", "Suggérer un praticien"
+        RECOMMEND_MY_MASSAGE_THERAPIST = "recommend_masseur", "Recommander mon masseur"
+        CITY_WAITLIST = "city_waitlist", "Prévenu à l'ouverture"
+
+    kind = models.CharField("type de demande", max_length=40, choices=Kind.choices)
+    full_name = models.CharField("nom", max_length=160)
+    email = models.EmailField("email")
+    city = models.CharField("ville", max_length=120, blank=True)
+    practitioner_name = models.CharField("praticien suggéré", max_length=160, blank=True)
+    message = models.TextField("message", blank=True)
+    source_page = models.CharField("page source", max_length=200, blank=True)
+    processed = models.BooleanField("traité", default=False)
+
+    class Meta:
+        verbose_name = "lead annuaire"
+        verbose_name_plural = "leads annuaire"
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()} — {self.email}"

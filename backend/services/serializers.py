@@ -16,6 +16,7 @@ class PublicMassageServiceSerializer(serializers.ModelSerializer):
             "title",
             "short_description",
             "full_description",
+            "service_category",
             "duration_minutes",
             "price_eur",
         )
@@ -29,6 +30,7 @@ class ProfessionalMassageServiceSerializer(serializers.ModelSerializer):
             "title",
             "short_description",
             "full_description",
+            "service_category",
             "duration_minutes",
             "price_eur",
             "is_active",

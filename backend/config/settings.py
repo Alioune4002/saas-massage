@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     "common",
     "accounts",
     "assistant",
+    "directory",
     "professionals",
     "services",
     "bookings",

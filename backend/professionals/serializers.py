@@ -6,6 +6,10 @@ from django.utils import timezone
 from reviews.serializers import PublicReviewSerializer
 
 from .models import (
+    DirectoryInterestLead,
+    DirectoryProfileCandidate,
+    DirectoryProfileClaimRequest,
+    DirectoryProfileRemovalRequest,
     PractitionerVerification,
     PractitionerVerificationDecision,
     ProfessionalPaymentAccount,
@@ -512,3 +516,113 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
             verification,
             context=self.context,
         ).data
+
+
+class PublicDirectoryListingSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    listing_kind = serializers.ChoiceField(choices=("claimed", "unclaimed"))
+    listing_url = serializers.CharField()
+    business_name = serializers.CharField()
+    slug = serializers.CharField()
+    city = serializers.CharField(allow_blank=True)
+    service_area = serializers.CharField(allow_blank=True)
+    public_headline = serializers.CharField(allow_blank=True)
+    bio = serializers.CharField(allow_blank=True)
+    specialties = serializers.ListField(child=serializers.CharField(), allow_empty=True)
+    massage_categories = serializers.ListField(child=serializers.CharField(), allow_empty=True)
+    visual_theme = serializers.CharField(allow_blank=True)
+    profile_photo_url = serializers.CharField(allow_blank=True)
+    cover_photo_url = serializers.CharField(allow_blank=True)
+    accepts_online_booking = serializers.BooleanField()
+    verification_badge = serializers.JSONField(allow_null=True)
+    claim_notice = serializers.CharField(allow_blank=True)
+
+
+class PublicDirectoryCandidateSerializer(serializers.ModelSerializer):
+    listing_kind = serializers.SerializerMethodField()
+    listing_url = serializers.SerializerMethodField()
+    claim_notice = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DirectoryProfileCandidate
+        fields = (
+            "id",
+            "listing_kind",
+            "listing_url",
+            "business_name",
+            "slug",
+            "city",
+            "service_area",
+            "public_headline",
+            "bio",
+            "specialties",
+            "massage_categories",
+            "claim_notice",
+        )
+
+    def get_listing_kind(self, _obj):
+        return "unclaimed"
+
+    def get_listing_url(self, obj):
+        return f"/fiches/{obj.slug}"
+
+    def get_claim_notice(self, _obj):
+        return (
+            "Informations de base publiées à titre indicatif. "
+            "Le praticien peut compléter, corriger ou demander la suppression de cette fiche."
+        )
+
+
+class DirectoryProfileCandidateDetailSerializer(serializers.ModelSerializer):
+    claim_notice = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DirectoryProfileCandidate
+        fields = (
+            "id",
+            "status",
+            "business_name",
+            "slug",
+            "city",
+            "service_area",
+            "public_headline",
+            "bio",
+            "specialties",
+            "massage_categories",
+            "source_label",
+            "source_url",
+            "imported_at",
+            "claim_notice",
+        )
+
+    def get_claim_notice(self, _obj):
+        return (
+            "Cette fiche n’est pas encore revendiquée. "
+            "Aucune réservation ou demande client n’est générée automatiquement à partir de cette page."
+        )
+
+
+class DirectoryProfileClaimRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DirectoryProfileClaimRequest
+        fields = ("claimant_name", "claimant_email", "claimant_phone", "message")
+
+
+class DirectoryProfileRemovalRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DirectoryProfileRemovalRequest
+        fields = ("requester_name", "requester_email", "reason")
+
+
+class DirectoryInterestLeadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DirectoryInterestLead
+        fields = (
+            "kind",
+            "full_name",
+            "email",
+            "city",
+            "practitioner_name",
+            "message",
+            "source_page",
+        )

@@ -68,6 +68,7 @@ export default function PublicProfileSettingsPage() {
           title: service.title,
           short_description: service.short_description,
           full_description: service.full_description,
+          service_category: service.service_category,
           duration_minutes: service.duration_minutes,
           price_eur: service.price_eur,
         }));
@@ -260,7 +261,7 @@ export default function PublicProfileSettingsPage() {
       <SectionHeading
         eyebrow="Visibilité en ligne"
         title="Mon profil public"
-        description="Prépare une page vitrine réservable, rassurante et suffisamment premium pour remplacer un site au démarrage."
+        description="Prépare une page praticien réservable, rassurante et simple à partager pendant le lancement."
         action={
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button variant="secondary" size="lg" onClick={handleCopyLink}>
@@ -935,7 +936,7 @@ export default function PublicProfileSettingsPage() {
           <Card>
             <CardHeader
               title="Style visuel"
-              subtitle="Prépare les futurs thèmes de page publique avec une base propre et scalable."
+              subtitle="Choisis un rendu cohérent pour ta page praticien publique."
             />
             <div className="mt-6 grid gap-4">
               {publicProfileThemes.map((theme) => (
@@ -962,7 +963,7 @@ export default function PublicProfileSettingsPage() {
           <Card>
             <CardHeader
               title="Préparation de l’assistant"
-              subtitle="L’architecture de la page publique réserve déjà un emplacement pour une future assistance payante."
+              subtitle="Prépare l’emplacement de l’assistant public sans promettre plus que ce qui est déjà actif."
             />
             <div className="mt-5 rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface-muted)] p-5">
               <div className="flex items-start gap-3">

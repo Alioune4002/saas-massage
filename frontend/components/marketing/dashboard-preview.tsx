@@ -4,9 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 
 const mockStats = [
-  { label: "Services actifs", value: "12", icon: Sparkles },
+  { label: "Soins présentés", value: "12", icon: Sparkles },
   { label: "Créneaux ouverts", value: "28", icon: CalendarClock },
-  { label: "CA confirmé", value: "3 240 €", icon: WalletCards },
+  { label: "Demandes reçues", value: "18", icon: WalletCards },
 ];
 
 export function DashboardPreview() {
@@ -17,10 +17,10 @@ export function DashboardPreview() {
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.26em] text-[var(--primary)]/80">
-              Interface pro
+              Page praticien + espace pro
             </p>
             <h3 className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
-              Tableau de bord NUADYX
+              Un espace simple pour présenter vos soins
             </h3>
           </div>
           <Badge tone="success">Mobile et ordinateur</Badge>
@@ -49,7 +49,7 @@ export function DashboardPreview() {
           <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--background-soft)] p-4">
             <div className="flex items-center justify-between gap-3">
               <h4 className="text-base font-semibold text-[var(--foreground)]">
-                Réservations du jour
+                Demandes du jour
               </h4>
               <Badge tone="info">5 demandes</Badge>
             </div>
@@ -81,7 +81,7 @@ export function DashboardPreview() {
 
           <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface-muted)] p-4">
             <h4 className="text-base font-semibold text-[var(--foreground)]">
-              Planning fluide
+              Créneaux faciles à partager
             </h4>
             <div className="mt-4 space-y-3">
               {[

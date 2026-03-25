@@ -242,6 +242,7 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
               title: service.title,
               short_description: service.short_description,
               full_description: service.full_description,
+              service_category: service.service_category,
               duration_minutes: service.duration_minutes,
               price_eur: service.price_eur,
             }));

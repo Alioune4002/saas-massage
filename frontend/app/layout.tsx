@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     template: "%s | NUADYX",
   },
   description:
-    "NUADYX, la plateforme SaaS premium pour piloter une activité de massage et de bien-être.",
+    "NUADYX, l’annuaire des praticiens du massage et du bien-être avec page praticien partageable et inscription gratuite pendant le lancement.",
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "NUADYX",
     description:
-      "La plateforme premium pour les professionnels du massage et du bien-être.",
+      "L’annuaire des praticiens du massage et du bien-être.",
     images: [
       {
         url: "/images/logo-dark.jpg",
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "NUADYX",
     description:
-      "La plateforme premium pour les professionnels du massage et du bien-être.",
+      "L’annuaire des praticiens du massage et du bien-être.",
     images: ["/images/logo-dark.jpg"],
   },
 };

@@ -1,0 +1,45 @@
+[
+  {
+    "model": "directory.sourceregistry",
+    "pk": "11111111-1111-4111-8111-111111111111",
+    "fields": {
+      "created_at": "2026-03-25T16:00:00Z",
+      "updated_at": "2026-03-25T16:00:00Z",
+      "name": "Import CSV manuel validé",
+      "base_url": "",
+      "source_type": "manual_csv",
+      "is_active": true,
+      "legal_status": "approved",
+      "tos_url": "",
+      "robots_url": "",
+      "notes_internal": "Source seed pour lancer des imports CSV manuels avec revue humaine.",
+      "import_policy_json": {
+        "discovery_mode": "whitelist_only",
+        "requires_operator": true,
+        "allows_publication": false
+      },
+      "allowed_fields_json": [
+        "external_id",
+        "public_name",
+        "business_name",
+        "city",
+        "postal_code",
+        "region",
+        "country",
+        "phone_public",
+        "email_public",
+        "website_url",
+        "instagram_url",
+        "service_tags_json",
+        "practice_modes_json",
+        "bio_short",
+        "address_public_text"
+      ],
+      "requires_manual_review_before_publish": true,
+      "can_contact_imported_profiles": false,
+      "default_visibility_mode": "private_draft",
+      "reviewed_by": null,
+      "reviewed_at": null
+    }
+  }
+]

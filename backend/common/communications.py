@@ -231,3 +231,52 @@ def send_review_invitation_email(invitation, review_url: str):
         message=message,
         recipients=[invitation.email],
     )
+
+
+def send_claim_profile_invitation_email(candidate, activation_url: str):
+    subject = "Votre fiche praticien peut être activée sur NUADYX"
+    message = (
+        f"Bonjour {candidate.business_name},\n\n"
+        "Une fiche praticien de base a été préparée sur NUADYX à partir d’informations publiques minimales "
+        "ou d’une suggestion reçue. Elle n’indique aucune fausse réservation, aucun faux client et aucune demande fictive.\n\n"
+        "Si vous êtes bien ce praticien, vous pouvez revendiquer cette fiche puis compléter vos photos, vos soins et vos disponibilités :\n"
+        f"{activation_url}\n\n"
+        "Si cette fiche ne vous concerne pas ou si vous souhaitez sa suppression, vous pourrez aussi le demander depuis cette page.\n\n"
+        "À bientôt sur NUADYX."
+    )
+    _send_transactional_email(
+        subject=subject,
+        message=message,
+        recipients=[candidate.public_email],
+    )
+
+
+def send_directory_incomplete_profile_nudge_email(*, imported_profile, target_email: str, completion_url: str):
+    subject = "Complétez votre fiche NUADYX"
+    message = (
+        f"Bonjour {imported_profile.public_name},\n\n"
+        "Votre fiche praticien peut encore être enrichie sur NUADYX.\n"
+        "Vous pouvez ajouter vos photos, vos soins, vos disponibilités et vérifier votre lien public.\n\n"
+        f"Compléter ma fiche : {completion_url}\n\n"
+        "Cet email ne signifie pas qu’une réservation ou une demande client vous attend déjà."
+    )
+    _send_transactional_email(
+        subject=subject,
+        message=message,
+        recipients=[target_email],
+    )
+
+
+def send_directory_removal_confirmation_email(removal_request):
+    subject = "Votre demande de suppression a bien été prise en compte"
+    message = (
+        f"Bonjour {removal_request.requester_name or 'bonjour'},\n\n"
+        "Votre demande de suppression ou d’opposition concernant une fiche praticien NUADYX a bien été enregistrée.\n"
+        "Elle sera traitée par notre équipe dans les meilleurs délais.\n\n"
+        "Si vous avez besoin de compléter votre demande, vous pouvez répondre à cet email ou écrire à support@nuadyx.com."
+    )
+    _send_transactional_email(
+        subject=subject,
+        message=message,
+        recipients=[removal_request.requester_email],
+    )

@@ -422,7 +422,7 @@ export default function DashboardPage() {
       <Card>
         <CardHeader
           title="Pistes prioritaires"
-          subtitle="Les écrans branchés maintenant te donnent déjà une base premium pour vendre et opérer."
+          subtitle="Les écrans déjà branchés te donnent une base claire pour présenter tes soins et gérer ton activité."
         />
         <div className="mt-6 grid gap-3 md:grid-cols-3">
           {[

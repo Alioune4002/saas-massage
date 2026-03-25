@@ -379,6 +379,230 @@ export type PublicProfessional = {
   verification_badge: VerificationBadge | null;
 };
 
+export type DirectoryListing = {
+  id: string;
+  listing_kind: "claimed" | "unclaimed";
+  listing_url: string;
+  business_name: string;
+  slug: string;
+  city: string;
+  service_area: string;
+  public_headline: string;
+  bio: string;
+  specialties: string[];
+  massage_categories: string[];
+  visual_theme: string;
+  profile_photo_url: string;
+  cover_photo_url: string;
+  accepts_online_booking: boolean;
+  verification_badge: VerificationBadge | null;
+  claim_notice: string;
+};
+
+export type DirectoryCandidate = {
+  id: string;
+  status: string;
+  business_name: string;
+  slug: string;
+  city: string;
+  service_area: string;
+  public_headline: string;
+  bio: string;
+  specialties: string[];
+  massage_categories: string[];
+  source_label: string;
+  source_url: string;
+  imported_at: string;
+  claim_notice: string;
+};
+
+export type ImportedPublicProfile = {
+  id: string;
+  listing_kind: "unclaimed";
+  listing_url: string;
+  slug: string;
+  public_name: string;
+  business_name: string;
+  city: string;
+  region: string;
+  phone_public: string;
+  email_public: string;
+  website_url: string;
+  instagram_url: string;
+  service_tags_json: string[];
+  practice_modes_json: string[];
+  bio_short: string;
+  address_public_text: string;
+  has_public_booking_link: boolean;
+  public_status_note: string;
+  claim_notice: string;
+};
+
+export type UnifiedPublicPractitioner = {
+  kind: "claimed" | "unclaimed";
+  claimed_profile: PublicProfessional | null;
+  imported_profile: ImportedPublicProfile | null;
+};
+
+export type SourceRegistryRecord = {
+  id: string;
+  name: string;
+  base_url: string;
+  source_type:
+    | "manual_csv"
+    | "manual_form"
+    | "api"
+    | "rss"
+    | "parser_custom";
+  is_active: boolean;
+  legal_status: "pending_review" | "approved" | "blocked" | "retired";
+  tos_url: string;
+  robots_url: string;
+  notes_internal: string;
+  import_policy_json: Record<string, unknown>;
+  allowed_fields_json: string[];
+  requires_manual_review_before_publish: boolean;
+  can_contact_imported_profiles: boolean;
+  default_visibility_mode: "private_draft" | "unclaimed_public";
+  reviewed_by_email: string;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SourceImportJobRecord = {
+  id: string;
+  source: string;
+  source_name: string;
+  trigger_type: "manual" | "scheduled" | "api_push";
+  status:
+    | "queued"
+    | "running"
+    | "completed"
+    | "partial_failed"
+    | "failed"
+    | "cancelled";
+  started_at: string | null;
+  finished_at: string | null;
+  created_by_email: string;
+  total_seen: number;
+  total_created: number;
+  total_updated: number;
+  total_skipped: number;
+  total_flagged: number;
+  error_log_text: string;
+  raw_report_json: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ImportedProfileRecord = {
+  id: string;
+  source: string;
+  source_name: string;
+  source_job: string | null;
+  external_id: string;
+  source_url: string;
+  source_snapshot_json: Record<string, unknown>;
+  imported_at: string;
+  last_seen_at: string;
+  import_status:
+    | "draft_imported"
+    | "pending_review"
+    | "approved_internal"
+    | "published_unclaimed"
+    | "claimed"
+    | "rejected"
+    | "removed";
+  dedupe_key: string;
+  confidence_score: string;
+  review_notes: string;
+  reviewed_by_email: string;
+  reviewed_at: string | null;
+  slug: string;
+  public_name: string;
+  business_name: string;
+  city: string;
+  postal_code: string;
+  region: string;
+  country: string;
+  phone_public: string;
+  email_public: string;
+  website_url: string;
+  instagram_url: string;
+  service_tags_json: string[];
+  practice_modes_json: string[];
+  bio_short: string;
+  address_public_text: string;
+  has_public_booking_link: boolean;
+  public_status_note: string;
+  contains_personal_data: boolean;
+  contact_allowed_based_on_source_policy: boolean;
+  publishable_minimum_ok: boolean;
+  removal_requested: boolean;
+  claimable: boolean;
+  is_public: boolean;
+  duplicate_signals: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type ContactCampaignRecord = {
+  id: string;
+  name: string;
+  source: string | null;
+  campaign_type: "claim_invite" | "incomplete_profile_nudge" | "source_recontact";
+  status: "draft" | "ready" | "sending" | "paused" | "completed" | "cancelled";
+  audience_filter_json: Record<string, unknown>;
+  email_template_key: string;
+  created_by_email: string;
+  approved_by_email: string;
+  approved_at: string | null;
+  total_targets: number;
+  total_sent: number;
+  total_failed: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RemovalRequestRecord = {
+  id: string;
+  imported_profile: string | null;
+  imported_profile_name: string;
+  requester_email: string;
+  requester_name: string;
+  reason: string;
+  status: "received" | "pending_review" | "completed" | "rejected";
+  created_at: string;
+  resolved_at: string | null;
+  notes: string;
+};
+
+export type ClaimVerificationResponse = {
+  status: "verified";
+  claim: { token: string; email: string };
+  profile: ImportedPublicProfile;
+};
+
+export type ClaimCompletionResponse = {
+  status: "approved";
+  token: string;
+  user: {
+    email: string;
+    role: "admin" | "professional";
+    professional_slug: string;
+    professional_name: string;
+    onboarding_completed: boolean;
+  };
+};
+
+export type MeClaimStatus = {
+  has_import_origin: boolean;
+  imported_profile_id: string;
+  imported_profile_status: string;
+  imported_profile_slug: string;
+};
+
 export type VerificationBadge = {
   label: string;
   verified_at: string | null;
@@ -485,6 +709,7 @@ export type Service = {
   title: string;
   short_description: string;
   full_description: string;
+  service_category: "" | "relaxant" | "deep_tissue" | "tantrique";
   duration_minutes: number;
   price_eur: string;
   is_active: boolean;
@@ -495,6 +720,7 @@ export type CreateServicePayload = {
   title: string;
   short_description: string;
   full_description: string;
+  service_category?: "" | "relaxant" | "deep_tissue" | "tantrique";
   duration_minutes: number;
   price_eur: string;
   is_active?: boolean;
@@ -508,6 +734,7 @@ export type PublicService = {
   title: string;
   short_description: string;
   full_description: string;
+  service_category: "" | "relaxant" | "deep_tissue" | "tantrique";
   duration_minutes: number;
   price_eur: string;
 };
@@ -808,6 +1035,16 @@ export type ReviewInvitation = {
   created_at: string;
 };
 
+export type DirectoryInterestPayload = {
+  kind: "suggest_practitioner" | "recommend_masseur" | "city_waitlist";
+  full_name: string;
+  email: string;
+  city: string;
+  practitioner_name: string;
+  message: string;
+  source_page: string;
+};
+
 export async function loginWithEmailPassword(payload: {
   email: string;
   password: string;
@@ -885,6 +1122,7 @@ export async function getPublicProfessional(slug: string) {
 export async function getPublicProfessionals(filters?: {
   city?: string;
   q?: string;
+  category?: string;
 }) {
   const params = new URLSearchParams();
   if (filters?.city) {
@@ -893,6 +1131,9 @@ export async function getPublicProfessionals(filters?: {
   if (filters?.q) {
     params.set("q", filters.q);
   }
+  if (filters?.category) {
+    params.set("category", filters.category);
+  }
   const query = params.toString();
   return apiRequest<PublicProfessional[]>(
     `/professionals/${query ? `?${query}` : ""}`,
@@ -900,6 +1141,319 @@ export async function getPublicProfessionals(filters?: {
     method: "GET",
     }
   );
+}
+
+export async function getDirectoryListings(filters?: {
+  city?: string;
+  q?: string;
+  category?: string;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.city) {
+    params.set("city", filters.city);
+  }
+  if (filters?.q) {
+    params.set("q", filters.q);
+  }
+  if (filters?.category) {
+    params.set("category", filters.category);
+  }
+  const query = params.toString();
+  return apiRequest<DirectoryListing[]>(
+    `/directory/listings/${query ? `?${query}` : ""}`,
+    {
+      method: "GET",
+    }
+  );
+}
+
+export async function getPublicDirectoryListings(filters?: {
+  city?: string;
+  q?: string;
+  category?: string;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.city) {
+    params.set("city", filters.city);
+  }
+  if (filters?.q) {
+    params.set("q", filters.q);
+  }
+  if (filters?.category) {
+    params.set("category", filters.category);
+  }
+  const query = params.toString();
+  return apiRequest<DirectoryListing[]>(
+    `/public/directory-listings${query ? `?${query}` : ""}`,
+    {
+      method: "GET",
+    }
+  );
+}
+
+export async function getDirectoryCandidate(slug: string) {
+  return apiRequest<DirectoryCandidate>(`/directory/candidates/${slug}/`, {
+    method: "GET",
+  });
+}
+
+export async function submitDirectoryClaimRequest(
+  slug: string,
+  payload: {
+    claimant_name: string;
+    claimant_email: string;
+    claimant_phone?: string;
+    message?: string;
+  }
+) {
+  return apiRequest<{ status: string; message: string; request_id: string }>(
+    `/directory/candidates/${slug}/claim/`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function submitDirectoryRemovalRequest(
+  slug: string,
+  payload: {
+    requester_name: string;
+    requester_email: string;
+    reason?: string;
+  }
+) {
+  return apiRequest<{ status: string; message: string; request_id: string }>(
+    `/directory/candidates/${slug}/remove/`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function submitDirectoryInterest(payload: DirectoryInterestPayload) {
+  return apiRequest<DirectoryInterestPayload>("/directory/interests/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getUnifiedPublicPractitioner(slug: string) {
+  return apiRequest<UnifiedPublicPractitioner>(`/public/practitioners/${slug}`, {
+    method: "GET",
+  });
+}
+
+export async function requestImportedProfileClaim(id: string, email: string) {
+  return apiRequest<{ status: string; claim_id: string }>(
+    `/public/imported-profiles/${id}/request-claim`,
+    {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }
+  );
+}
+
+export async function createRemovalRequest(payload: {
+  slug_or_id: string;
+  requester_email: string;
+  requester_name: string;
+  reason: string;
+}) {
+  return apiRequest<{ status: string; request_id: string }>("/public/removal-request", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function verifyClaimToken(token: string) {
+  return apiRequest<ClaimVerificationResponse>("/public/claim/verify", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+export async function completeClaimOnboarding(payload: {
+  token: string;
+  first_name?: string;
+  last_name?: string;
+  business_name?: string;
+  email?: string;
+  password?: string;
+  password_confirmation?: string;
+  accepted_documents?: string[];
+}) {
+  return apiRequest<ClaimCompletionResponse>("/public/claim/complete-onboarding", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getMeClaimStatus() {
+  return apiRequest<MeClaimStatus>("/me/claim-status", {
+    auth: true,
+  });
+}
+
+export async function completeProfileFromImport(payload: {
+  imported_profile_id?: string;
+  claim_token?: string;
+}) {
+  return apiRequest<{ status: string; professional_slug: string }>(
+    "/me/complete-profile-from-import",
+    {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function getAdminSources() {
+  return apiRequest<SourceRegistryRecord[]>("/admin/sources", {
+    auth: true,
+  });
+}
+
+export async function createAdminSource(payload: Partial<SourceRegistryRecord>) {
+  return apiRequest<SourceRegistryRecord>("/admin/sources", {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAdminSource(id: string, payload: Partial<SourceRegistryRecord>) {
+  return apiRequest<SourceRegistryRecord>(`/admin/sources/${id}`, {
+    method: "PATCH",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function runAdminSourceImport(params: {
+  sourceId: string;
+  file?: File;
+  mapping?: Record<string, string>;
+  payloadText?: string;
+  dryRun?: boolean;
+}) {
+  const formData = new FormData();
+  if (params.file) {
+    formData.append("file", params.file);
+  }
+  if (params.payloadText) {
+    formData.append("payload_text", params.payloadText);
+  }
+  formData.append("mapping", JSON.stringify(params.mapping || {}));
+  formData.append("dry_run", params.dryRun ? "true" : "false");
+  return apiRequest<{
+    job_id: string;
+    dry_run: boolean;
+    summary: {
+      total_seen: number;
+      total_created: number;
+      total_updated: number;
+      total_skipped: number;
+      total_flagged: number;
+    };
+    report: Record<string, unknown>;
+  }>(`/admin/sources/${params.sourceId}/run-import`, {
+    method: "POST",
+    auth: true,
+    body: formData,
+  });
+}
+
+export async function getAdminImportJobs() {
+  return apiRequest<SourceImportJobRecord[]>("/admin/import-jobs", {
+    auth: true,
+  });
+}
+
+export async function getAdminImportJob(id: string) {
+  return apiRequest<SourceImportJobRecord>(`/admin/import-jobs/${id}`, {
+    auth: true,
+  });
+}
+
+export async function getAdminImportedProfiles(filters?: {
+  import_status?: string;
+  source?: string;
+  city?: string;
+  claimable?: string;
+  publishable_minimum_ok?: string;
+  probable_duplicates?: boolean;
+}) {
+  const params = new URLSearchParams();
+  Object.entries(filters || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value));
+    }
+  });
+  const query = params.toString();
+  return apiRequest<ImportedProfileRecord[]>(
+    `/admin/imported-profiles${query ? `?${query}` : ""}`,
+    {
+      auth: true,
+    }
+  );
+}
+
+export async function createAdminImportedProfile(payload: Partial<ImportedProfileRecord>) {
+  return apiRequest<ImportedProfileRecord>("/admin/imported-profiles", {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function bulkActionImportedProfiles(payload: {
+  ids: string[];
+  action:
+    | "approve_internal"
+    | "publish_unclaimed"
+    | "reject"
+    | "mark_removed"
+    | "send_claim_invite"
+    | "merge"
+    | "export_csv";
+  target_id?: string;
+}) {
+  return apiRequest<{ updated: number; details: Array<Record<string, unknown>> }>(
+    "/admin/imported-profiles/bulk-action",
+    {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function createContactCampaign(payload: Partial<ContactCampaignRecord>) {
+  return apiRequest<ContactCampaignRecord>("/admin/contact-campaigns", {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function sendContactCampaign(id: string) {
+  return apiRequest<{ sent: number; failed: number; total_targets: number }>(
+    `/admin/contact-campaigns/${id}/send`,
+    {
+      method: "POST",
+      auth: true,
+    }
+  );
+}
+
+export async function getRemovalRequests(status?: string) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiRequest<RemovalRequestRecord[]>(`/admin/removal-requests${query}`, {
+    auth: true,
+  });
 }
 
 export async function getServices() {

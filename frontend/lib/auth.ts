@@ -44,5 +44,9 @@ export function getAuthenticatedHomePath(user: MeResponse | null) {
     return "/login";
   }
 
+  if (user.role === "admin") {
+    return "/ops";
+  }
+
   return user.onboarding_completed ? "/dashboard" : "/bienvenue";
 }

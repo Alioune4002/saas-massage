@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FieldWrapper, Input, Textarea } from "@/components/ui/field";
+import { FieldWrapper, Input, Select, Textarea } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,6 +41,7 @@ export default function ServicesPage() {
     title: "",
     short_description: "",
     full_description: "",
+    service_category: "",
     duration_minutes: 60,
     price_eur: "95.00",
     is_active: true,
@@ -89,6 +90,7 @@ export default function ServicesPage() {
         title: "",
         short_description: "",
         full_description: "",
+        service_category: "",
         duration_minutes: 60,
         price_eur: "95.00",
         is_active: true,
@@ -258,6 +260,28 @@ export default function ServicesPage() {
             </div>
 
             <div className="md:col-span-2">
+              <FieldWrapper
+                label="Catégorie principale"
+                hint="Utile pour les pages annuaire par type de massage"
+              >
+                <Select
+                  value={form.service_category}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      service_category: event.target.value as CreateServicePayload["service_category"],
+                    }))
+                  }
+                >
+                  <option value="">Non précisée</option>
+                  <option value="relaxant">Massage relaxant</option>
+                  <option value="deep_tissue">Massage deep tissue</option>
+                  <option value="tantrique">Massage tantrique</option>
+                </Select>
+              </FieldWrapper>
+            </div>
+
+            <div className="md:col-span-2">
               <FieldWrapper label="Description complète">
                 <Textarea
                   value={form.full_description}
@@ -344,6 +368,15 @@ export default function ServicesPage() {
                   </div>
 
                   <div className="mt-5 flex flex-wrap gap-2">
+                    {service.service_category ? (
+                      <Badge tone="info">
+                        {service.service_category === "relaxant"
+                          ? "Massage relaxant"
+                          : service.service_category === "deep_tissue"
+                            ? "Massage deep tissue"
+                            : "Massage tantrique"}
+                      </Badge>
+                    ) : null}
                     <Badge tone="info">{service.duration_minutes} min</Badge>
                     <Badge>Ordre {service.sort_order}</Badge>
                   </div>

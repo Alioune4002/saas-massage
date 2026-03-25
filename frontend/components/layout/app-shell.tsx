@@ -42,7 +42,7 @@ const navigation = [
   {
     href: "/services",
     label: "Mes prestations",
-    description: "Prestations, durées et tarifs",
+    description: "Prestations, durées et infos utiles",
     icon: Sparkles,
   },
   {
@@ -85,7 +85,7 @@ const navigation = [
 
 const pageDescriptions: Record<string, string> = {
   "/dashboard": "Pilote ton activité de massage et de bien-être avec une lecture claire et rassurante.",
-  "/services": "Présente tes prestations avec des tarifs et durées immédiatement compréhensibles.",
+  "/services": "Présente tes prestations avec des durées lisibles et une page praticien claire.",
   "/availabilities": "Garde une lecture claire de la journée, des créneaux ouverts, des plages bloquées et des rendez-vous à venir.",
   "/bookings": "Retrouve les réservations clients et les décisions importantes au même endroit.",
   "/profil-public": "Prépare la page publique réservable qui présente ton univers et tes prestations.",
@@ -247,11 +247,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="mt-auto rounded-[1.6rem] border border-[var(--border)] bg-[var(--surface-muted)] p-4">
             <Badge tone="success">Base praticien active</Badge>
             <p className="mt-4 text-base font-semibold text-[var(--foreground)]">
-              Expérience prête pour la monétisation
+              Une base simple pour votre activité
             </p>
             <p className="mt-2 text-sm leading-6 text-[var(--foreground-subtle)]">
-              Un shell propre et scalable pour brancher dashboard, assistant,
-              billing et prochains modules sans repartir de zéro.
+              Un espace clair pour gérer vos prestations, vos réservations, votre
+              profil public et vos réponses aux clients.
             </p>
           </div>
         </aside>

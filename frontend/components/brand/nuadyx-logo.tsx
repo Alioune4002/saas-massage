@@ -54,7 +54,7 @@ export function NuadyxLogo({
       {showText ? (
         <div className="min-w-0">
           <div className="text-[0.72rem] uppercase tracking-[0.34em] text-[var(--primary)]/90">
-            Plateforme massage premium
+            Annuaire massage & bien-être
           </div>
           <div className="text-lg font-semibold tracking-[0.28em] text-[var(--foreground)]">
             NUADYX
