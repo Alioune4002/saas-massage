@@ -33,6 +33,30 @@ export class ApiUnavailableError extends ApiError {
   }
 }
 
+function extractApiErrorMessage(body: unknown, status: number) {
+  if (typeof body === "object" && body !== null) {
+    if ("detail" in body && typeof (body as { detail?: unknown }).detail === "string") {
+      return (body as { detail: string }).detail;
+    }
+
+    for (const value of Object.values(body as Record<string, unknown>)) {
+      if (typeof value === "string" && value.trim()) {
+        return value;
+      }
+
+      if (
+        Array.isArray(value) &&
+        typeof value[0] === "string" &&
+        value[0].trim()
+      ) {
+        return value[0];
+      }
+    }
+  }
+
+  return `Erreur API (${status})`;
+}
+
 function broadcastApiAvailability(
   available: boolean,
   reason = ""
@@ -95,6 +119,36 @@ export function clearStoredToken() {
 
 export function getApiBase() {
   return API_BASE.replace(/\/$/, "");
+}
+
+export function getApiOrigin() {
+  return getApiBase().replace(/\/api$/, "");
+}
+
+export async function probeBackendAvailability() {
+  try {
+    const response = await fetch(`${getApiOrigin()}/health/`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      broadcastApiAvailability(
+        false,
+        "Le service répond, mais son état n'est pas encore exploitable."
+      );
+      return false;
+    }
+
+    broadcastApiAvailability(true);
+    return true;
+  } catch (error) {
+    const reason =
+      error instanceof Error
+        ? error.message
+        : "Connexion impossible avec le serveur.";
+    broadcastApiAvailability(false, reason);
+    return false;
+  }
 }
 
 type RequestOptions = RequestInit & {
@@ -163,13 +217,7 @@ export async function apiRequest<T>(
   }
 
   if (!response.ok) {
-    const message =
-      typeof responseBody === "object" &&
-      responseBody !== null &&
-      "detail" in responseBody &&
-      typeof (responseBody as { detail?: unknown }).detail === "string"
-        ? (responseBody as { detail: string }).detail
-        : `Erreur API (${response.status})`;
+    const message = extractApiErrorMessage(responseBody, response.status);
 
     if (response.status >= 500) {
       throw new ApiUnavailableError(message, response.status, responseBody);

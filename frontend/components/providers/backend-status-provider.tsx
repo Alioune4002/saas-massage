@@ -12,6 +12,7 @@ import {
 import {
   API_STATUS_EVENT,
   getStoredApiAvailabilityState,
+  probeBackendAvailability,
   type ApiAvailabilityState,
 } from "@/lib/api";
 
@@ -46,6 +47,8 @@ export function BackendStatusProvider({
   const [status, setStatus] = useState<ApiAvailabilityState>(getInitialState);
 
   useEffect(() => {
+    let active = true;
+
     function handleStatus(event: Event) {
       const customEvent = event as CustomEvent<ApiAvailabilityState>;
       if (!customEvent.detail) {
@@ -65,19 +68,32 @@ export function BackendStatusProvider({
     }
 
     function handleOnline() {
+      void refreshStatus();
+    }
+
+    async function refreshStatus() {
+      const available = await probeBackendAvailability();
+      if (!active || available) {
+        return;
+      }
+
       setStatus((current) => ({
         ...current,
-        reason: current.available
-          ? current.reason
-          : "Connexion rétablie. Le service revient progressivement.",
+        available: false,
+        checkedAt: new Date().toISOString(),
+        reason:
+          current.reason ||
+          "Le service reste temporairement indisponible. Réessaie dans quelques instants.",
       }));
     }
 
     window.addEventListener(API_STATUS_EVENT, handleStatus as EventListener);
     window.addEventListener("offline", handleOffline);
     window.addEventListener("online", handleOnline);
+    void refreshStatus();
 
     return () => {
+      active = false;
       window.removeEventListener(
         API_STATUS_EVENT,
         handleStatus as EventListener

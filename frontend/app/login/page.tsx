@@ -21,7 +21,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { backendUnavailable } = useBackendStatus();
 
-  const [email, setEmail] = useState("alioune.bsk@gmail.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

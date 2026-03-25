@@ -21,11 +21,24 @@ from django.http import JsonResponse
 from django.urls import include, path
 
 
+def api_root(_request):
+    return JsonResponse(
+        {
+            "service": "NUADYX API",
+            "status": "ok",
+            "health": "/health/",
+            "admin": "/admin/",
+            "api": "/api/",
+        }
+    )
+
+
 def healthcheck(_request):
     return JsonResponse({"status": "ok"})
 
 
 urlpatterns = [
+    path("", api_root, name="api-root"),
     path("admin/", admin.site.urls),
     path("health/", healthcheck, name="healthcheck"),
 
