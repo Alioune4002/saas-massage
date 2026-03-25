@@ -23,12 +23,14 @@ export function getStoredUser(): MeResponse | null {
 export function setStoredUser(user: MeResponse) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  document.cookie = `massage_saas_role=${encodeURIComponent(user.role)}; Path=/; Max-Age=2592000; SameSite=Lax`;
 }
 
 export function clearSession() {
   clearStoredToken();
   if (typeof window !== "undefined") {
     window.localStorage.removeItem(USER_STORAGE_KEY);
+    document.cookie = "massage_saas_role=; Path=/; Max-Age=0; SameSite=Lax";
   }
 }
 

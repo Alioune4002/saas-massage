@@ -9,6 +9,9 @@ import {
   ArrowLeft,
   CalendarClock,
   Copy,
+  Globe,
+  Link2,
+  type LucideIcon,
   Mail,
   MapPin,
   MessageSquare,
@@ -88,6 +91,10 @@ function buildPreviewProfessional(
     visual_theme: profile.visual_theme,
     phone: profile.phone,
     public_email: profile.public_email,
+    website_url: profile.website_url,
+    instagram_url: profile.instagram_url,
+    facebook_url: profile.facebook_url,
+    tiktok_url: profile.tiktok_url,
     accepts_online_booking: false,
     reservation_payment_mode: profile.reservation_payment_mode,
     deposit_value_type: profile.deposit_value_type,
@@ -159,6 +166,31 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
   const paymentProcessing = searchParams.get("payment") === "processing";
   const paymentCancelled = searchParams.get("payment") === "cancelled";
   const serviceUnavailable = error.includes("Service temporairement indisponible");
+  const socialLinks = useMemo(
+    (): Array<{ label: string; href: string; icon: LucideIcon }> =>
+      profile
+        ? [
+            profile.website_url
+              ? { label: "Site web", href: profile.website_url, icon: Globe }
+              : null,
+            profile.instagram_url
+              ? { label: "Instagram", href: profile.instagram_url, icon: Link2 }
+              : null,
+            profile.facebook_url
+              ? { label: "Facebook", href: profile.facebook_url, icon: Link2 }
+              : null,
+            profile.tiktok_url
+              ? { label: "TikTok", href: profile.tiktok_url, icon: Link2 }
+              : null,
+          ].filter(
+            (
+              link
+            ): link is { label: string; href: string; icon: LucideIcon } =>
+              Boolean(link)
+          )
+        : [],
+    [profile]
+  );
 
   useEffect(() => {
     let active = true;
@@ -613,6 +645,25 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
                   </a>
                 ) : null}
               </div>
+              {socialLinks.length > 0 ? (
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {socialLinks.map((link) => {
+                    const Icon = link.icon;
+                    return (
+                      <a
+                        key={link.label}
+                        href={link.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-full border border-[var(--hero-card-border-soft)] bg-[var(--hero-card-surface)] px-3 py-2 text-sm text-[var(--inverse-foreground-muted)] transition hover:text-[var(--inverse-foreground)]"
+                      >
+                        <Icon className="h-4 w-4" />
+                        {link.label}
+                      </a>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
 
             <div className="relative flex justify-start lg:justify-end">
@@ -1083,6 +1134,25 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
                 ) : null}
                 {draft.contactInformation ? (
                   <p className="leading-6">{draft.contactInformation}</p>
+                ) : null}
+                {socialLinks.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {socialLinks.map((link) => {
+                      const Icon = link.icon;
+                      return (
+                        <a
+                          key={link.label}
+                          href={link.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-sm text-[var(--foreground-muted)] transition hover:text-[var(--foreground)]"
+                        >
+                          <Icon className="h-4 w-4" />
+                          {link.label}
+                        </a>
+                      );
+                    })}
+                  </div>
                 ) : null}
               </div>
             </Card>

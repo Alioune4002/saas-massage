@@ -234,11 +234,14 @@ def send_review_invitation_email(invitation, review_url: str):
 
 
 def send_claim_profile_invitation_email(candidate, activation_url: str):
+    recipient_email = getattr(candidate, "public_email", "") or getattr(candidate, "email_public", "")
+    source_label = getattr(candidate, "source_label", "") or getattr(getattr(candidate, "source", None), "name", "")
     subject = "Votre fiche praticien peut être activée sur NUADYX"
     message = (
         f"Bonjour {candidate.business_name},\n\n"
         "Une fiche praticien de base a été préparée sur NUADYX à partir d’informations publiques minimales "
         "ou d’une suggestion reçue. Elle n’indique aucune fausse réservation, aucun faux client et aucune demande fictive.\n\n"
+        f"Origine indiquée : {source_label or 'source autorisée par NUADYX'}.\n\n"
         "Si vous êtes bien ce praticien, vous pouvez revendiquer cette fiche puis compléter vos photos, vos soins et vos disponibilités :\n"
         f"{activation_url}\n\n"
         "Si cette fiche ne vous concerne pas ou si vous souhaitez sa suppression, vous pourrez aussi le demander depuis cette page.\n\n"
@@ -247,7 +250,7 @@ def send_claim_profile_invitation_email(candidate, activation_url: str):
     _send_transactional_email(
         subject=subject,
         message=message,
-        recipients=[candidate.public_email],
+        recipients=[recipient_email],
     )
 
 

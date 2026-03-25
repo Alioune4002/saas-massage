@@ -207,6 +207,10 @@ class PublicProfessionalSerializer(serializers.ModelSerializer):
             "visual_theme",
             "phone",
             "public_email",
+            "website_url",
+            "instagram_url",
+            "facebook_url",
+            "tiktok_url",
             "accepts_online_booking",
             "reservation_payment_mode",
             "deposit_value_type",
@@ -345,6 +349,10 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
             "visual_theme",
             "phone",
             "public_email",
+            "website_url",
+            "instagram_url",
+            "facebook_url",
+            "tiktok_url",
             "is_public",
             "accepts_online_booking",
             "reservation_payment_mode",
@@ -364,6 +372,13 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
             "onboarding_step",
             "onboarding_completed",
         )
+
+    @staticmethod
+    def _normalize_public_url(value: str) -> str:
+        normalized = value.strip()
+        if normalized and "://" not in normalized:
+            normalized = f"https://{normalized}"
+        return normalized
 
     def to_internal_value(self, data):
         if hasattr(data, "copy"):
@@ -390,6 +405,18 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
                 ]
 
         return super().to_internal_value(data)
+
+    def validate_website_url(self, value):
+        return self._normalize_public_url(value)
+
+    def validate_instagram_url(self, value):
+        return self._normalize_public_url(value)
+
+    def validate_facebook_url(self, value):
+        return self._normalize_public_url(value)
+
+    def validate_tiktok_url(self, value):
+        return self._normalize_public_url(value)
 
     def validate_slug(self, value: str):
         queryset = ProfessionalProfile.objects.exclude(pk=self.instance.pk if self.instance else None)

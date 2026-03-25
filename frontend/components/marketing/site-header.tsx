@@ -9,11 +9,8 @@ export function SiteHeader() {
     <header className="sticky top-0 z-30 px-4 py-4 md:px-6">
       <div className="glass-panel mx-auto flex max-w-7xl items-center justify-between gap-3 overflow-hidden rounded-[1.8rem] px-4 py-3 md:px-5">
         <Link href="/" className="min-w-0 shrink">
-          <span className="sm:hidden">
-            <NuadyxLogo priority />
-          </span>
-          <span className="hidden sm:inline-flex">
-            <NuadyxLogo showText priority />
+          <span className="inline-flex min-w-0 max-w-[13.5rem] sm:max-w-none">
+            <NuadyxLogo priority showText textClassName="min-w-0" />
           </span>
         </Link>
 

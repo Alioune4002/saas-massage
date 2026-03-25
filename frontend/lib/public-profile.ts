@@ -24,6 +24,12 @@ export type PublicProfileDraft = {
   headline: string;
   specialties: string[];
   themeKey: PublicProfileThemeKey;
+  phone: string;
+  publicEmail: string;
+  websiteUrl: string;
+  instagramUrl: string;
+  facebookUrl: string;
+  tiktokUrl: string;
   isPublic: boolean;
   acceptsOnlineBooking: boolean;
   reservationPaymentMode: DashboardProfile["reservation_payment_mode"];
@@ -183,6 +189,12 @@ export function createDefaultPublicProfileDraft(
         ? profile.specialties
         : normalizeSpecialties(services),
     themeKey: profile.visual_theme,
+    phone: profile.phone || "",
+    publicEmail: profile.public_email || "",
+    websiteUrl: "website_url" in profile ? profile.website_url || "" : "",
+    instagramUrl: "instagram_url" in profile ? profile.instagram_url || "" : "",
+    facebookUrl: "facebook_url" in profile ? profile.facebook_url || "" : "",
+    tiktokUrl: "tiktok_url" in profile ? profile.tiktok_url || "" : "",
     isPublic: "is_public" in profile ? profile.is_public : true,
     acceptsOnlineBooking: profile.accepts_online_booking,
     reservationPaymentMode: profile.reservation_payment_mode,

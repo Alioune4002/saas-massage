@@ -404,6 +404,10 @@ class ClaimCompleteOnboardingSerializer(serializers.Serializer):
     def validate(self, attrs):
         request = self.context["request"]
         if request.user.is_authenticated:
+            if request.user.role != User.Role.PROFESSIONAL:
+                raise serializers.ValidationError(
+                    "Connectez-vous avec un compte praticien ou utilisez un lien de revendication anonyme."
+                )
             return attrs
 
         required_signup_fields = ("email", "password", "password_confirmation")

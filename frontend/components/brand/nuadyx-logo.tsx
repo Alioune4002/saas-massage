@@ -10,6 +10,7 @@ type NuadyxLogoProps = {
   compact?: boolean;
   priority?: boolean;
   showText?: boolean;
+  textClassName?: string;
 };
 
 const FULL_LOGO_BY_THEME = {
@@ -24,6 +25,7 @@ export function NuadyxLogo({
   compact = false,
   priority = false,
   showText = false,
+  textClassName = "",
 }: NuadyxLogoProps) {
   const { theme } = useTheme();
   const source = compact ? ICON_SOURCE : FULL_LOGO_BY_THEME[theme];
@@ -52,11 +54,11 @@ export function NuadyxLogo({
       </div>
 
       {showText ? (
-        <div className="min-w-0">
-          <div className="text-[0.72rem] uppercase tracking-[0.34em] text-[var(--primary)]/90">
+        <div className={cn("min-w-0", textClassName)}>
+          <div className="truncate text-[0.72rem] uppercase tracking-[0.22em] text-[var(--primary)]/90 sm:tracking-[0.34em]">
             Annuaire massage & bien-être
           </div>
-          <div className="text-lg font-semibold tracking-[0.28em] text-[var(--foreground)]">
+          <div className="truncate text-base font-semibold tracking-[0.18em] text-[var(--foreground)] sm:text-lg sm:tracking-[0.28em]">
             NUADYX
           </div>
         </div>

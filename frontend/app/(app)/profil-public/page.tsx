@@ -166,6 +166,12 @@ export default function PublicProfileSettingsPage() {
       payload.append("public_headline", draft.headline);
       payload.append("specialties", JSON.stringify(draft.specialties));
       payload.append("visual_theme", draft.themeKey);
+      payload.append("phone", draft.phone);
+      payload.append("public_email", draft.publicEmail);
+      payload.append("website_url", draft.websiteUrl);
+      payload.append("instagram_url", draft.instagramUrl);
+      payload.append("facebook_url", draft.facebookUrl);
+      payload.append("tiktok_url", draft.tiktokUrl);
       payload.append("is_public", String(draft.isPublic));
       payload.append(
         "accepts_online_booking",
@@ -610,6 +616,105 @@ export default function PublicProfileSettingsPage() {
 
           <Card>
             <CardHeader
+              title="Contact et liens publics"
+              subtitle="Ajoute les coordonnées et liens que tu souhaites afficher à tes clients."
+            />
+
+            <div className="mt-6 grid gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <FieldWrapper label="Téléphone public">
+                  <Input
+                    value={draft.phone}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current ? { ...current, phone: event.target.value } : current
+                      )
+                    }
+                    placeholder="06 00 00 00 00"
+                  />
+                </FieldWrapper>
+
+                <FieldWrapper label="Email public">
+                  <Input
+                    type="email"
+                    value={draft.publicEmail}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? { ...current, publicEmail: event.target.value }
+                          : current
+                      )
+                    }
+                    placeholder="bonjour@nuadyx.com"
+                  />
+                </FieldWrapper>
+              </div>
+
+              <FieldWrapper
+                label="Site web"
+                hint="Tu peux coller ton domaine même sans https://"
+              >
+                <Input
+                  value={draft.websiteUrl}
+                  onChange={(event) =>
+                    setDraft((current) =>
+                      current
+                        ? { ...current, websiteUrl: event.target.value }
+                        : current
+                    )
+                  }
+                  placeholder="mon-site.fr"
+                />
+              </FieldWrapper>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <FieldWrapper label="Instagram">
+                  <Input
+                    value={draft.instagramUrl}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? { ...current, instagramUrl: event.target.value }
+                          : current
+                      )
+                    }
+                    placeholder="instagram.com/moncompte"
+                  />
+                </FieldWrapper>
+
+                <FieldWrapper label="Facebook">
+                  <Input
+                    value={draft.facebookUrl}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? { ...current, facebookUrl: event.target.value }
+                          : current
+                      )
+                    }
+                    placeholder="facebook.com/moncompte"
+                  />
+                </FieldWrapper>
+
+                <FieldWrapper label="TikTok">
+                  <Input
+                    value={draft.tiktokUrl}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? { ...current, tiktokUrl: event.target.value }
+                          : current
+                      )
+                    }
+                    placeholder="tiktok.com/@moncompte"
+                  />
+                </FieldWrapper>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
               title="Informations utiles avant la séance"
               subtitle="Aide le client à savoir quoi prévoir et ce que tu apportes selon ta façon d’exercer."
             />
@@ -907,8 +1012,8 @@ export default function PublicProfileSettingsPage() {
 
             <div className="mt-6 space-y-4">
               <SwitchRow
-                label="Rendre mon profil public"
-                description="Permettre à la page d’être visible en ligne et partagée."
+                label="Afficher mon profil dans l’annuaire"
+                description="Tu peux masquer temporairement ta page sans perdre tes contenus ni tes réglages."
                 checked={draft.isPublic}
                 onCheckedChange={(checked) =>
                   setDraft((current) =>

@@ -15,7 +15,6 @@ from common.permissions import (
     CanReviewProfiles,
     CanReviewSources,
     IsAdminUser,
-    has_directory_permission,
 )
 from professionals.models import ProfessionalProfile
 from professionals.serializers import PublicProfessionalSerializer
@@ -44,6 +43,7 @@ from .serializers import (
     UnifiedPublicPractitionerSerializer,
 )
 from .services import (
+    build_campaign_targets,
     create_claim_for_profile,
     execute_import_job,
     log_audit,
@@ -240,13 +240,27 @@ class AdminImportedProfilesBulkActionView(APIView):
                 updated += 1
             elif action == "send_claim_invite":
                 target_email = profile.email_public
-                if target_email and profile.claimable:
+                if (
+                    target_email
+                    and profile.claimable
+                    and profile.contact_allowed_based_on_source_policy
+                ):
                     claim = create_claim_for_profile(imported_profile=profile, email=target_email)
                     send_claim_invite(
                         claim=claim,
                         activation_url=f"{settings.FRONTEND_APP_URL}/revendiquer/{claim.token}",
                     )
                     updated += 1
+                else:
+                    details.append(
+                        {
+                            "id": str(profile.id),
+                            "action": action,
+                            "skipped": True,
+                            "reason": "Contact sortant non autorisé ou email manquant.",
+                        }
+                    )
+                    continue
             elif action == "merge":
                 target = get_object_or_404(ImportedProfile, pk=serializer.validated_data["target_id"])
                 target.service_tags_json = list({*target.service_tags_json, *profile.service_tags_json})
@@ -298,7 +312,12 @@ class AdminContactCampaignSendView(APIView):
 
     def post(self, request, pk):
         campaign = get_object_or_404(ContactCampaign, pk=pk)
-        if campaign.total_targets > 25 and not campaign.approved_by and not has_directory_permission(request.user, "super_admin"):
+        target_count = build_campaign_targets(campaign=campaign).count()
+        is_super_admin = bool(
+            getattr(request.user, "is_superuser", False)
+            or request.user.has_perm("directory.super_admin")
+        )
+        if target_count > 25 and not campaign.approved_by and not is_super_admin:
             return Response(
                 {"detail": "Cette campagne dépasse le seuil d'envoi sans approbation explicite."},
                 status=400,
@@ -306,7 +325,8 @@ class AdminContactCampaignSendView(APIView):
         if not campaign.approved_by:
             campaign.approved_by = request.user
             campaign.approved_at = timezone.now()
-            campaign.save(update_fields=["approved_by", "approved_at", "updated_at"])
+        campaign.total_targets = target_count
+        campaign.save(update_fields=["approved_by", "approved_at", "total_targets", "updated_at"])
         result = run_contact_campaign(campaign=campaign, base_url=settings.FRONTEND_APP_URL)
         log_audit(actor=request.user, action="campaign.sent", obj=campaign, after=result)
         return Response(result)

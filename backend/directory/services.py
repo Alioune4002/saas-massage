@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 
 from django.utils import timezone
 
@@ -30,13 +31,15 @@ IMPORTER_BY_SOURCE_TYPE = {
 
 
 def log_audit(*, actor, action: str, obj, before: dict | None = None, after: dict | None = None):
+    normalized_before = json.loads(json.dumps(before or {}, default=str))
+    normalized_after = json.loads(json.dumps(after or {}, default=str))
     AuditLog.objects.create(
         actor=actor,
         action=action,
         object_type=obj.__class__.__name__,
         object_id=str(obj.pk),
-        before_json=before or {},
-        after_json=after or {},
+        before_json=normalized_before,
+        after_json=normalized_after,
     )
 
 
@@ -148,6 +151,8 @@ def create_claim_for_profile(*, imported_profile: ImportedProfile, email: str, p
 
 
 def send_claim_invite(*, claim: PractitionerClaim, activation_url: str, campaign: ContactCampaign | None = None):
+    if not claim.imported_profile.contact_allowed_based_on_source_policy:
+        raise ValueError("Le contact sortant n'est pas autorisé pour cette fiche importée.")
     send_claim_profile_invitation_email(claim.imported_profile, activation_url)
     ContactMessageLog.objects.create(
         campaign=campaign,
@@ -161,6 +166,8 @@ def send_claim_invite(*, claim: PractitionerClaim, activation_url: str, campaign
 
 
 def send_incomplete_profile_nudge(*, imported_profile: ImportedProfile, target_email: str, completion_url: str, campaign: ContactCampaign | None = None):
+    if not imported_profile.contact_allowed_based_on_source_policy:
+        raise ValueError("Le contact sortant n'est pas autorisé pour cette fiche importée.")
     send_directory_incomplete_profile_nudge_email(
         imported_profile=imported_profile,
         target_email=target_email,
@@ -189,7 +196,7 @@ def send_removal_confirmation(*, removal_request: RemovalRequest):
     )
 
 
-def run_contact_campaign(*, campaign: ContactCampaign, base_url: str) -> dict:
+def build_campaign_targets(*, campaign: ContactCampaign):
     targets = ImportedProfile.objects.filter(
         import_status=ImportedProfile.ImportStatus.PUBLISHED_UNCLAIMED,
         claimable=True,
@@ -199,6 +206,11 @@ def run_contact_campaign(*, campaign: ContactCampaign, base_url: str) -> dict:
     city = campaign.audience_filter_json.get("city")
     if city:
         targets = targets.filter(city__icontains=city)
+    return targets
+
+
+def run_contact_campaign(*, campaign: ContactCampaign, base_url: str) -> dict:
+    targets = build_campaign_targets(campaign=campaign)
 
     sent = 0
     failed = 0

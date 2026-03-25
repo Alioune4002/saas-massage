@@ -2,13 +2,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from professionals.models import (
-    DirectoryInterestLead,
-    DirectoryProfileCandidate,
-    DirectoryProfileClaimRequest,
-    DirectoryProfileRemovalRequest,
-    ProfessionalProfile,
-)
+from directory.models import ImportedProfile, PractitionerClaim, RemovalRequest, SourceRegistry
+from professionals.models import DirectoryInterestLead, ProfessionalProfile
 from services.models import MassageService
 
 
@@ -35,13 +30,26 @@ class DirectoryListingTests(TestCase):
             duration_minutes=60,
             price_eur="90.00",
         )
-        self.candidate = DirectoryProfileCandidate.objects.create(
+        source = SourceRegistry.objects.create(
+            name="Source publique legacy",
+            source_type=SourceRegistry.SourceType.MANUAL_CSV,
+            legal_status=SourceRegistry.LegalStatus.APPROVED,
+            is_active=True,
+            can_contact_imported_profiles=True,
+        )
+        self.imported_profile = ImportedProfile.objects.create(
+            source=source,
+            external_id="legacy-1",
+            public_name="Atelier Bien-Être Nantes",
             business_name="Atelier Bien-Être Nantes",
-            slug="atelier-bien-etre-nantes",
             city="Nantes",
-            status=DirectoryProfileCandidate.Status.PUBLISHED_UNCLAIMED,
-            massage_categories=["deep_tissue"],
-            source_label="Suggestion",
+            region="Bretagne",
+            email_public="atelier@example.com",
+            service_tags_json=["deep_tissue"],
+            import_status=ImportedProfile.ImportStatus.PUBLISHED_UNCLAIMED,
+            is_public=True,
+            publishable_minimum_ok=True,
+            contact_allowed_based_on_source_policy=True,
         )
         self.client = APIClient()
 
@@ -58,10 +66,11 @@ class DirectoryListingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()), 1)
         self.assertEqual(response.json()[0]["listing_kind"], "unclaimed")
+        self.assertEqual(response.json()[0]["slug"], self.imported_profile.slug)
 
     def test_claim_request_endpoint_creates_trace(self):
         response = self.client.post(
-            f"/api/directory/candidates/{self.candidate.slug}/claim/",
+            f"/api/directory/candidates/{self.imported_profile.slug}/claim/",
             {
                 "claimant_name": "Alioune Seck",
                 "claimant_email": "alioune@example.com",
@@ -72,14 +81,13 @@ class DirectoryListingTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(
-            DirectoryProfileClaimRequest.objects.filter(candidate=self.candidate).count(),
-            1,
-        )
+        claim = PractitionerClaim.objects.get(imported_profile=self.imported_profile)
+        self.assertEqual(claim.email, "alioune@example.com")
+        self.assertIn("Alioune Seck", claim.decision_notes)
 
     def test_removal_request_endpoint_marks_candidate(self):
         response = self.client.post(
-            f"/api/directory/candidates/{self.candidate.slug}/remove/",
+            f"/api/directory/candidates/{self.imported_profile.slug}/remove/",
             {
                 "requester_name": "Alioune Seck",
                 "requester_email": "alioune@example.com",
@@ -89,10 +97,10 @@ class DirectoryListingTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 201)
-        self.candidate.refresh_from_db()
-        self.assertIsNotNone(self.candidate.removal_requested_at)
+        self.imported_profile.refresh_from_db()
+        self.assertTrue(self.imported_profile.removal_requested)
         self.assertEqual(
-            DirectoryProfileRemovalRequest.objects.filter(candidate=self.candidate).count(),
+            RemovalRequest.objects.filter(imported_profile=self.imported_profile).count(),
             1,
         )
 

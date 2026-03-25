@@ -169,6 +169,10 @@ class ProfessionalProfile(TimeStampedUUIDModel):
     )
     phone = models.CharField("téléphone", max_length=30, blank=True)
     public_email = models.EmailField("email public", blank=True)
+    website_url = models.URLField("site web", blank=True)
+    instagram_url = models.URLField("Instagram", blank=True)
+    facebook_url = models.URLField("Facebook", blank=True)
+    tiktok_url = models.URLField("TikTok", blank=True)
     imported_profile_origin = models.ForeignKey(
         "directory.ImportedProfile",
         on_delete=models.SET_NULL,

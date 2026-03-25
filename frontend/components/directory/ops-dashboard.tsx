@@ -37,8 +37,7 @@ export function OpsDashboard() {
   const [pageError, setPageError] = useState("");
   const [pageSuccess, setPageSuccess] = useState("");
   const [importSourceId, setImportSourceId] = useState("");
-
-  const currentStatusFilter = "pending_review";
+  const [currentStatusFilter, setCurrentStatusFilter] = useState("pending_review");
 
   useEffect(() => {
     if (!loading && user?.role !== "admin") {
@@ -318,9 +317,20 @@ export function OpsDashboard() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-2xl font-semibold text-[var(--foreground)]">File de review</h2>
-              <p className="mt-2 text-sm text-[var(--foreground-muted)]">
-                Statut courant: {currentStatusFilter}
-              </p>
+              <div className="mt-3 max-w-xs">
+                <FieldWrapper label="Statut courant">
+                  <Select
+                    value={currentStatusFilter}
+                    onChange={(event) => setCurrentStatusFilter(event.target.value)}
+                  >
+                    <option value="draft_imported">draft_imported</option>
+                    <option value="pending_review">pending_review</option>
+                    <option value="approved_internal">approved_internal</option>
+                    <option value="published_unclaimed">published_unclaimed</option>
+                    <option value="removed">removed</option>
+                  </Select>
+                </FieldWrapper>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={() => handleBulkAction("approve_internal")}>

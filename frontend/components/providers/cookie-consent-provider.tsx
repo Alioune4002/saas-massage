@@ -15,11 +15,11 @@ import { Card } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { SwitchRow } from "@/components/ui/switch-row";
 import {
-  COOKIE_CONSENT_STORAGE_KEY,
   COOKIE_PREFERENCES_EVENT,
   createCookieConsentState,
   defaultCookieConsentState,
   getCookieConsentSessionKey,
+  persistCookieConsent,
   readStoredCookieConsent,
   type CookieConsentPreferences,
   type CookieConsentState,
@@ -53,9 +53,10 @@ function CookieConsentPanel({
   onSave: () => void;
 }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[80] px-3 pb-3 md:px-6 md:pb-6">
-      <Card className="mx-auto max-w-4xl rounded-[2rem] shadow-[0_24px_90px_rgba(0,0,0,0.2)]">
-        <div className="flex flex-col gap-4">
+    <div className="fixed inset-0 z-[80] overflow-y-auto px-3 py-3 sm:px-4 md:px-6 md:py-6">
+      <div className="mx-auto flex min-h-full w-full max-w-4xl items-end">
+        <Card className="w-full rounded-[2rem] shadow-[0_24px_90px_rgba(0,0,0,0.2)]">
+          <div className="flex max-h-[min(42rem,calc(100vh-1.5rem))] flex-col gap-4 overflow-y-auto overscroll-contain pr-1 sm:max-h-[calc(100vh-3rem)]">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
               <p className="text-xs uppercase tracking-[0.26em] text-[var(--primary)]/80">
@@ -67,7 +68,7 @@ function CookieConsentPanel({
                   : "Gérer mes cookies"}
               </h2>
               <p className="mt-3 text-sm leading-6 text-[var(--foreground-muted)]">
-                NUADYX active uniquement les cookies nécessaires par défaut. Les autres catégories restent désactivées tant que vous ne les avez pas acceptées.
+                NUADYX n’active que les cookies nécessaires par défaut. Les autres catégories restent désactivées tant que vous ne les avez pas choisies.
               </p>
             </div>
             {mode === "preferences" ? (
@@ -79,11 +80,11 @@ function CookieConsentPanel({
 
           <div className="grid gap-3">
             <Notice tone="info">
-              Les cookies strictement nécessaires restent actifs pour assurer l’authentification, la sécurité et le bon fonctionnement du service.
+              Les cookies nécessaires restent actifs pour la connexion, la sécurité et le bon fonctionnement du service.
             </Notice>
             <SwitchRow
               label="Mesure d’audience"
-              description="Comprendre la fréquentation et la performance du service, sans activer cette catégorie avant votre accord."
+              description="Mieux comprendre la fréquentation et les usages du site, uniquement si vous l’acceptez."
               checked={preferences.analytics}
               onCheckedChange={(checked) =>
                 onChange({ ...preferences, analytics: checked })
@@ -91,7 +92,7 @@ function CookieConsentPanel({
             />
             <SwitchRow
               label="Publicité / retargeting"
-              description="Réservé aux pixels publicitaires et outils de retargeting si ces services sont activés plus tard."
+              description="Pour d’éventuels outils publicitaires et de retargeting, seulement avec votre accord."
               checked={preferences.advertising}
               onCheckedChange={(checked) =>
                 onChange({ ...preferences, advertising: checked })
@@ -99,7 +100,7 @@ function CookieConsentPanel({
             />
             <SwitchRow
               label="Support / tiers"
-              description="Pour des services de support, chat ou intégrations tierces nécessitant votre accord."
+              description="Pour certains outils de support ou d’intégration externe nécessitant votre accord."
               checked={preferences.support}
               onCheckedChange={(checked) =>
                 onChange({ ...preferences, support: checked })
@@ -120,7 +121,8 @@ function CookieConsentPanel({
             </div>
           </div>
         </div>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }
@@ -129,17 +131,29 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
   const enabled =
     (process.env.NEXT_PUBLIC_FEATURE_COOKIE_CONSENT || "true").toLowerCase() ===
     "true";
-  const [consent, setConsent] = useState<CookieConsentState | null>(() => {
-    if (!enabled) {
-      return null;
-    }
-    return readStoredCookieConsent();
-  });
-  const [showBanner, setShowBanner] = useState(() => enabled && !readStoredCookieConsent());
+  const [ready, setReady] = useState(!enabled);
+  const [consent, setConsent] = useState<CookieConsentState | null>(null);
+  const [showBanner, setShowBanner] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
-  const [draft, setDraft] = useState<CookieConsentPreferences>(
-    () => readStoredCookieConsent() || defaultCookieConsentState
-  );
+  const [draft, setDraft] = useState<CookieConsentPreferences>(defaultCookieConsentState);
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const storedConsent = readStoredCookieConsent();
+      setConsent(storedConsent);
+      setDraft(storedConsent || defaultCookieConsentState);
+      setShowBanner(!storedConsent);
+      setReady(true);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) {
@@ -164,10 +178,7 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
     const nextState = createCookieConsentState(preferences, source);
     setConsent(nextState);
     setDraft(nextState);
-    window.localStorage.setItem(
-      COOKIE_CONSENT_STORAGE_KEY,
-      JSON.stringify(nextState)
-    );
+    persistCookieConsent(nextState);
     setShowBanner(false);
     setShowPreferences(false);
 
@@ -185,7 +196,7 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
         },
       });
     } catch {
-      // La preuve locale reste prioritaire pour ne pas bloquer l'UX.
+      // On conserve le choix local même si l'enregistrement distant échoue.
     }
   }
 
@@ -211,7 +222,7 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
   return (
     <CookieConsentContext.Provider value={contextValue}>
       {children}
-      {enabled && showBanner ? (
+      {enabled && ready && showBanner ? (
         <CookieConsentPanel
           mode="banner"
           preferences={draft}
@@ -232,7 +243,7 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
           onSave={() => void persistConsent(draft, "banner")}
         />
       ) : null}
-      {enabled && showPreferences ? (
+      {enabled && ready && showPreferences ? (
         <CookieConsentPanel
           mode="preferences"
           preferences={draft}

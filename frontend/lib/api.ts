@@ -128,11 +128,13 @@ function getStoredToken(): string | null {
 export function setStoredToken(token: string) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem("massage_saas_token", token);
+  document.cookie = `massage_saas_token=${encodeURIComponent(token)}; Path=/; Max-Age=2592000; SameSite=Lax`;
 }
 
 export function clearStoredToken() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem("massage_saas_token");
+  document.cookie = "massage_saas_token=; Path=/; Max-Age=0; SameSite=Lax";
 }
 
 export function getApiBase() {
@@ -314,6 +316,10 @@ export type DashboardProfile = {
   visual_theme: "epure" | "chaleur" | "prestige";
   phone: string;
   public_email: string;
+  website_url: string;
+  instagram_url: string;
+  facebook_url: string;
+  tiktok_url: string;
   is_public: boolean;
   accepts_online_booking: boolean;
   reservation_payment_mode: "none" | "deposit" | "full";
@@ -357,6 +363,10 @@ export type PublicProfessional = {
   visual_theme: "epure" | "chaleur" | "prestige";
   phone: string;
   public_email: string;
+  website_url: string;
+  instagram_url: string;
+  facebook_url: string;
+  tiktok_url: string;
   accepts_online_booking: boolean;
   reservation_payment_mode: DashboardProfile["reservation_payment_mode"];
   deposit_value_type: DashboardProfile["deposit_value_type"];
@@ -1148,23 +1158,7 @@ export async function getDirectoryListings(filters?: {
   q?: string;
   category?: string;
 }) {
-  const params = new URLSearchParams();
-  if (filters?.city) {
-    params.set("city", filters.city);
-  }
-  if (filters?.q) {
-    params.set("q", filters.q);
-  }
-  if (filters?.category) {
-    params.set("category", filters.category);
-  }
-  const query = params.toString();
-  return apiRequest<DirectoryListing[]>(
-    `/directory/listings/${query ? `?${query}` : ""}`,
-    {
-      method: "GET",
-    }
-  );
+  return getPublicDirectoryListings(filters);
 }
 
 export async function getPublicDirectoryListings(filters?: {
@@ -1192,9 +1186,26 @@ export async function getPublicDirectoryListings(filters?: {
 }
 
 export async function getDirectoryCandidate(slug: string) {
-  return apiRequest<DirectoryCandidate>(`/directory/candidates/${slug}/`, {
-    method: "GET",
-  });
+  const data = await getUnifiedPublicPractitioner(slug);
+  if (data.kind !== "unclaimed" || !data.imported_profile) {
+    throw new Error("Cette fiche candidate n’est pas disponible.");
+  }
+  return {
+    id: data.imported_profile.id,
+    status: "published_unclaimed",
+    business_name: data.imported_profile.business_name || data.imported_profile.public_name,
+    slug: data.imported_profile.slug,
+    city: data.imported_profile.city,
+    service_area: data.imported_profile.region,
+    public_headline: data.imported_profile.public_status_note,
+    bio: data.imported_profile.bio_short,
+    specialties: data.imported_profile.service_tags_json,
+    massage_categories: data.imported_profile.service_tags_json,
+    source_label: "",
+    source_url: "",
+    imported_at: "",
+    claim_notice: data.imported_profile.claim_notice,
+  } satisfies DirectoryCandidate;
 }
 
 export async function submitDirectoryClaimRequest(
@@ -1206,13 +1217,13 @@ export async function submitDirectoryClaimRequest(
     message?: string;
   }
 ) {
-  return apiRequest<{ status: string; message: string; request_id: string }>(
-    `/directory/candidates/${slug}/claim/`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }
-  );
+  const candidate = await getDirectoryCandidate(slug);
+  const result = await requestImportedProfileClaim(candidate.id, payload.claimant_email);
+  return {
+    status: result.status,
+    message: "La demande de revendication a bien été enregistrée.",
+    request_id: result.claim_id,
+  };
 }
 
 export async function submitDirectoryRemovalRequest(
@@ -1223,13 +1234,17 @@ export async function submitDirectoryRemovalRequest(
     reason?: string;
   }
 ) {
-  return apiRequest<{ status: string; message: string; request_id: string }>(
-    `/directory/candidates/${slug}/remove/`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }
-  );
+  const result = await createRemovalRequest({
+    slug_or_id: slug,
+    requester_email: payload.requester_email,
+    requester_name: payload.requester_name,
+    reason: payload.reason || "",
+  });
+  return {
+    status: result.status,
+    message: "La demande de suppression a bien été enregistrée.",
+    request_id: result.request_id,
+  };
 }
 
 export async function submitDirectoryInterest(payload: DirectoryInterestPayload) {
