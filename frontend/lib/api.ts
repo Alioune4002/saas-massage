@@ -1,5 +1,23 @@
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+function resolveApiBase() {
+  const configuredBase = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (configuredBase) {
+    return configuredBase;
+  }
+
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+
+    if (
+      hostname === "www.nuadyx.com" ||
+      hostname === "nuadyx.com" ||
+      hostname.endsWith(".nuadyx.com")
+    ) {
+      return "https://api.nuadyx.com/api";
+    }
+  }
+
+  return "http://127.0.0.1:8000/api";
+}
 
 export const API_STATUS_EVENT = "nuadyx:api-status";
 const API_STATUS_STORAGE_KEY = "nuadyx-api-status";
@@ -118,7 +136,7 @@ export function clearStoredToken() {
 }
 
 export function getApiBase() {
-  return API_BASE.replace(/\/$/, "");
+  return resolveApiBase().replace(/\/$/, "");
 }
 
 export function getApiOrigin() {
