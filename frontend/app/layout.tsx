@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Manrope } from "next/font/google";
 
+import { CookieConsentProvider } from "@/components/providers/cookie-consent-provider";
 import { GlobalServiceBanner } from "@/components/layout/global-service-banner";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { BackendStatusProvider } from "@/components/providers/backend-status-provider";
@@ -92,11 +93,13 @@ export default function RootLayout({
       <body className="min-h-full bg-[var(--background)] text-[var(--foreground)] font-sans">
         <ThemeProvider>
           <BackendStatusProvider>
-            <div className="flex min-h-screen flex-col">
-              <GlobalServiceBanner />
-              <div className="flex-1">{children}</div>
-              <SiteFooter />
-            </div>
+            <CookieConsentProvider>
+              <div className="flex min-h-screen flex-col">
+                <GlobalServiceBanner />
+                <div className="flex-1">{children}</div>
+                <SiteFooter />
+              </div>
+            </CookieConsentProvider>
           </BackendStatusProvider>
         </ThemeProvider>
       </body>

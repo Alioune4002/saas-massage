@@ -2,8 +2,9 @@ from django.db.models import Q
 from rest_framework import generics, permissions, parsers
 
 from common.permissions import HasProfessionalProfile, IsProfessionalUser
-from .models import ProfessionalProfile
+from .models import PractitionerVerification, ProfessionalProfile
 from .serializers import (
+    PractitionerVerificationSerializer,
     ProfessionalDashboardSerializer,
     PublicProfessionalSerializer,
 )
@@ -16,7 +17,7 @@ class PublicProfessionalListView(generics.ListAPIView):
     def get_queryset(self):
         queryset = (
             ProfessionalProfile.objects.filter(is_public=True)
-            .select_related("assistant_profile", "payment_account")
+            .select_related("assistant_profile", "payment_account", "verification")
             .prefetch_related("reviews")
             .order_by("business_name")
         )
@@ -43,7 +44,7 @@ class PublicProfessionalDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return (
             ProfessionalProfile.objects.filter(is_public=True)
-            .select_related("assistant_profile", "payment_account")
+            .select_related("assistant_profile", "payment_account", "verification")
             .prefetch_related("reviews")
         )
 
@@ -55,3 +56,16 @@ class ProfessionalDashboardProfileView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user.professional_profile
+
+
+class ProfessionalVerificationView(generics.RetrieveUpdateAPIView):
+    serializer_class = PractitionerVerificationSerializer
+    permission_classes = [permissions.IsAuthenticated, IsProfessionalUser, HasProfessionalProfile]
+    parser_classes = [parsers.JSONParser, parsers.MultiPartParser, parsers.FormParser]
+
+    def get_object(self):
+        verification, _created = PractitionerVerification.objects.get_or_create(
+            professional=self.request.user.professional_profile
+        )
+        verification.refresh_expired_status()
+        return verification

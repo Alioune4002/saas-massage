@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, CreditCard, Landmark, Wallet } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { FieldWrapper, Input } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,14 +17,20 @@ import {
   getPaymentOverview,
   type DashboardProfile,
   type PaymentOverview,
+  type PractitionerVerification,
+  updatePractitionerVerification,
 } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
 export default function PaymentsPage() {
   const [profile, setProfile] = useState<DashboardProfile | null>(null);
   const [overview, setOverview] = useState<PaymentOverview | null>(null);
+  const [verification, setVerification] = useState<PractitionerVerification | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [savingVerification, setSavingVerification] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -38,6 +45,7 @@ export default function PaymentsPage() {
         ]);
         if (!active) return;
         setProfile(profileData);
+        setVerification(profileData.verification);
         setOverview(overviewData);
       } catch (err) {
         if (!active) return;
@@ -79,6 +87,40 @@ export default function PaymentsPage() {
       setConnecting(false);
     }
   }
+
+  async function handleVerificationSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    try {
+      setSavingVerification(true);
+      setError("");
+      const nextVerification = await updatePractitionerVerification(formData);
+      setVerification(nextVerification);
+      setNotice(
+        "Les éléments de vérification ont été enregistrés. Le statut sera mis à jour après revue."
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Impossible d’enregistrer les éléments de vérification."
+      );
+    } finally {
+      setSavingVerification(false);
+    }
+  }
+
+  const verificationStatusLabel = verification
+    ? {
+        not_started: "Non commencé",
+        pending: "En attente",
+        in_review: "En revue",
+        verified: "Vérifié",
+        rejected: "Refusé",
+        expired: "Expiré",
+      }[verification.status]
+    : "Non commencé";
 
   return (
     <div className="space-y-6">
@@ -138,6 +180,117 @@ export default function PaymentsPage() {
               <Button size="lg" onClick={handleConnectAccount} disabled={connecting}>
                 {connecting ? "Préparation..." : "Connecter mon compte de paiement"}
               </Button>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex flex-col gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.26em] text-[var(--primary)]/80">
+                  Vérification praticien
+                </p>
+                <h2 className="mt-3 text-2xl font-semibold text-[var(--foreground)]">
+                  Statut KYC : {verificationStatusLabel}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-[var(--foreground-muted)]">
+                  Déposez vos justificatifs pour préparer la mention publique
+                  “Praticien vérifié” et fluidifier les opérations sensibles.
+                </p>
+              </div>
+
+              {verification?.badge_is_active ? (
+                <Notice tone="success">
+                  Praticien vérifié. {verification.badge_tooltip}
+                </Notice>
+              ) : null}
+              {verification?.rejection_reason ? (
+                <Notice tone="error">{verification.rejection_reason}</Notice>
+              ) : null}
+
+              <form
+                onSubmit={handleVerificationSubmit}
+                className="grid gap-4 lg:grid-cols-2"
+              >
+                <FieldWrapper label="SIREN">
+                  <Input
+                    name="siren"
+                    defaultValue={verification?.siren || ""}
+                    placeholder="9 chiffres"
+                  />
+                </FieldWrapper>
+                <FieldWrapper label="SIRET">
+                  <Input
+                    name="siret"
+                    defaultValue={verification?.siret || ""}
+                    placeholder="14 chiffres"
+                  />
+                </FieldWrapper>
+                <FieldWrapper label="Bénéficiaire">
+                  <Input
+                    name="beneficiary_name"
+                    defaultValue={verification?.beneficiary_name || ""}
+                    placeholder="Nom du bénéficiaire des versements"
+                  />
+                </FieldWrapper>
+                <FieldWrapper label="4 derniers chiffres de l’IBAN">
+                  <Input
+                    name="iban_last4"
+                    maxLength={4}
+                    defaultValue={verification?.iban_last4 || ""}
+                    placeholder="1234"
+                  />
+                </FieldWrapper>
+                <FieldWrapper label="Pièce d’identité">
+                  <Input name="identity_document" type="file" />
+                </FieldWrapper>
+                <FieldWrapper label="Selfie de vérification">
+                  <Input name="selfie_document" type="file" />
+                </FieldWrapper>
+                <FieldWrapper label="Justificatif d’activité">
+                  <Input name="activity_document" type="file" />
+                </FieldWrapper>
+                <FieldWrapper label="Attestation RC Pro">
+                  <Input name="liability_insurance_document" type="file" />
+                </FieldWrapper>
+                <FieldWrapper label="Justificatif bancaire">
+                  <Input name="iban_document" type="file" />
+                </FieldWrapper>
+                <div className="lg:col-span-2">
+                  <Button type="submit" disabled={savingVerification}>
+                    {savingVerification
+                      ? "Enregistrement..."
+                      : "Enregistrer les éléments de vérification"}
+                  </Button>
+                </div>
+              </form>
+
+              {verification?.decisions?.length ? (
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold text-[var(--foreground)]">
+                    Historique des décisions
+                  </h3>
+                  <div className="grid gap-3">
+                    {verification.decisions.slice(0, 4).map((decision) => (
+                      <div
+                        key={decision.id}
+                        className="rounded-[1.2rem] border border-[var(--border)] bg-[var(--background-soft)] px-4 py-3"
+                      >
+                        <p className="text-sm font-medium text-[var(--foreground)]">
+                          {decision.from_status || "aucun"} → {decision.to_status}
+                        </p>
+                        {decision.reason ? (
+                          <p className="mt-1 text-sm text-[var(--foreground-muted)]">
+                            {decision.reason}
+                          </p>
+                        ) : null}
+                        <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--foreground-subtle)]">
+                          {new Date(decision.created_at).toLocaleString("fr-FR")}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </Card>
 

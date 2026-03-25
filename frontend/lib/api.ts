@@ -323,6 +323,7 @@ export type DashboardProfile = {
   keep_payment_after_deadline: boolean;
   payment_message: string;
   payment_account: PaymentAccount | null;
+  verification: PractitionerVerification;
   profile_photo_url: string;
   cover_photo_url: string;
   onboarding_step:
@@ -375,6 +376,14 @@ export type PublicProfessional = {
   reviews: ReviewPublicItem[];
   review_average: number | null;
   review_count: number;
+  verification_badge: VerificationBadge | null;
+};
+
+export type VerificationBadge = {
+  label: string;
+  verified_at: string | null;
+  expires_at: string | null;
+  tooltip: string;
 };
 
 export type PaymentAccount = {
@@ -387,6 +396,41 @@ export type PaymentAccount = {
   details_submitted: boolean;
   charges_enabled: boolean;
   payouts_enabled: boolean;
+};
+
+export type PractitionerVerification = {
+  status:
+    | "not_started"
+    | "pending"
+    | "in_review"
+    | "verified"
+    | "rejected"
+    | "expired";
+  siren: string;
+  siret: string;
+  beneficiary_name: string;
+  iban_last4: string;
+  identity_document_url: string;
+  selfie_document_url: string;
+  activity_document_url: string;
+  liability_insurance_document_url: string;
+  iban_document_url: string;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  verified_at: string | null;
+  expires_at: string | null;
+  rejection_reason: string;
+  internal_notes: string;
+  badge_is_active: boolean;
+  badge_tooltip: string;
+  decisions: Array<{
+    id: string;
+    from_status: string;
+    to_status: string;
+    reason: string;
+    decided_by_email: string;
+    created_at: string;
+  }>;
 };
 
 export type AssistantFaqItem = {
@@ -722,19 +766,33 @@ export type ReviewPublicItem = {
   author_name: string;
   rating: number;
   comment: string;
+  source: "booking" | "invitation" | "legacy";
   verification_type:
     | "booked_on_platform"
     | "invited_by_practitioner"
     | "imported_legacy_customer";
   verification_label: string;
+  experience_date: string | null;
+  practitioner_response: string;
+  practitioner_responded_at: string | null;
   published_at: string | null;
 };
 
 export type ReviewPractitionerItem = ReviewPublicItem & {
-  status: "pending" | "published" | "rejected" | "flagged";
+  status: "pending" | "approved" | "rejected" | "hidden";
   flag_reason: string;
   moderation_flags: string[];
   created_at: string;
+};
+
+export type RuntimeConfig = {
+  features: {
+    cookie_consent: boolean;
+    practitioner_verification: boolean;
+    review_replies: boolean;
+  };
+  cookie_consent_version: string;
+  legal_documents: Record<string, { title: string; version: string }>;
 };
 
 export type ReviewInvitation = {
@@ -767,6 +825,7 @@ export async function registerPractitioner(payload: {
   email: string;
   password: string;
   password_confirmation: string;
+  accepted_documents: string[];
 }) {
   return apiRequest<AuthLoginResponse>("/auth/register/", {
     method: "POST",
@@ -788,8 +847,29 @@ export async function getDashboardProfile() {
   });
 }
 
+export async function getRuntimeConfig() {
+  return apiRequest<RuntimeConfig>("/runtime-config/", {
+    method: "GET",
+  });
+}
+
 export async function updateDashboardProfile(data: FormData) {
   return apiRequest<DashboardProfile>("/dashboard/profile/", {
+    method: "PATCH",
+    auth: true,
+    body: data,
+  });
+}
+
+export async function getPractitionerVerification() {
+  return apiRequest<PractitionerVerification>("/dashboard/verification/", {
+    method: "GET",
+    auth: true,
+  });
+}
+
+export async function updatePractitionerVerification(data: FormData) {
+  return apiRequest<PractitionerVerification>("/dashboard/verification/", {
     method: "PATCH",
     auth: true,
     body: data,
@@ -1101,6 +1181,14 @@ export async function flagReview(id: string, reason: string) {
   });
 }
 
+export async function respondToReview(id: string, response: string) {
+  return apiRequest<ReviewPractitionerItem>(`/dashboard/reviews/${id}/respond/`, {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({ response }),
+  });
+}
+
 export async function getReviewTokenInfo(token: string) {
   return apiRequest<{
     valid: boolean;
@@ -1122,6 +1210,36 @@ export async function submitReview(payload: {
 }) {
   return apiRequest<ReviewPublicItem>("/reviews/submit/", {
     method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function recordCookieConsent(payload: {
+  session_key?: string;
+  source: "banner" | "preferences" | "support";
+  necessary?: boolean;
+  analytics: boolean;
+  advertising: boolean;
+  support: boolean;
+  evidence?: Record<string, unknown>;
+  revoke?: boolean;
+}) {
+  return apiRequest<{ id: string }>("/consents/cookies/", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function recordLegalAcceptance(payload: {
+  document_slug: string;
+  document_version: string;
+  source: "registration" | "dashboard" | "booking" | "support";
+  metadata?: Record<string, unknown>;
+}) {
+  return apiRequest<{ id: string }>("/consents/legal/", {
+    method: "POST",
+    auth: false,
     body: JSON.stringify(payload),
   });
 }

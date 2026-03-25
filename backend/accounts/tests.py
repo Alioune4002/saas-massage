@@ -6,6 +6,7 @@ from rest_framework.test import APITestCase
 
 from accounts.models import User
 from professionals.models import ProfessionalProfile
+from common.models import LegalAcceptanceRecord
 
 
 class RegistrationTests(APITestCase):
@@ -19,6 +20,12 @@ class RegistrationTests(APITestCase):
                 "email": "sam@example.com",
                 "password": "secret1234",
                 "password_confirmation": "secret1234",
+                "accepted_documents": [
+                    "cgu",
+                    "cgv",
+                    "contrat-praticien",
+                    "confidentialite",
+                ],
             },
             format="json",
         )
@@ -35,6 +42,10 @@ class RegistrationTests(APITestCase):
         self.assertEqual(profile.onboarding_step, ProfessionalProfile.OnboardingStep.WELCOME)
         self.assertFalse(profile.is_public)
         self.assertIn("token", response.data)
+        self.assertEqual(
+            LegalAcceptanceRecord.objects.filter(user=user).count(),
+            4,
+        )
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("Bienvenue dans NUADYX", mail.outbox[0].subject)
 
@@ -48,6 +59,12 @@ class RegistrationTests(APITestCase):
                 "email": "sam2@example.com",
                 "password": "secret1234",
                 "password_confirmation": "other1234",
+                "accepted_documents": [
+                    "cgu",
+                    "cgv",
+                    "contrat-praticien",
+                    "confidentialite",
+                ],
             },
             format="json",
         )

@@ -107,6 +107,15 @@ function buildPreviewProfessional(
     reviews: [],
     review_average: null,
     review_count: 0,
+    verification_badge:
+      profile.verification?.badge_is_active
+        ? {
+            label: "Praticien vérifié",
+            verified_at: profile.verification.verified_at,
+            expires_at: profile.verification.expires_at,
+            tooltip: profile.verification.badge_tooltip,
+          }
+        : null,
   };
 }
 
@@ -543,10 +552,20 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
                 <Badge className={theme.accentBadgeClassName}>
                   {getPracticeModeLead(draft)}
                 </Badge>
+                {profile.verification_badge ? (
+                  <Badge className={theme.accentBadgeClassName}>
+                    {profile.verification_badge.label}
+                  </Badge>
+                ) : null}
               </div>
               <h1 className="mt-5 text-4xl font-semibold tracking-tight md:text-5xl">
                 {draft.displayName}
               </h1>
+              {profile.verification_badge ? (
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--inverse-foreground-subtle)]">
+                  {profile.verification_badge.tooltip}
+                </p>
+              ) : null}
               <p className="mt-4 max-w-3xl text-lg leading-8 text-[var(--inverse-foreground-muted)]">
                 {draft.headline}
               </p>
@@ -939,7 +958,20 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
                               </p>
                               <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--foreground-subtle)]">
                                 {review.verification_label}
+                                {review.experience_date
+                                  ? ` · expérience du ${new Date(review.experience_date).toLocaleDateString("fr-FR")}`
+                                  : ""}
                               </p>
+                              {review.practitioner_response ? (
+                                <div className="mt-3 rounded-[1rem] border border-[var(--border)] bg-[var(--background-soft)] px-3 py-3">
+                                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--foreground-subtle)]">
+                                    Réponse du praticien
+                                  </p>
+                                  <p className="mt-2 text-sm leading-6 text-[var(--foreground-muted)]">
+                                    {review.practitioner_response}
+                                  </p>
+                                </div>
+                              ) : null}
                             </div>
                           ))}
                         </div>

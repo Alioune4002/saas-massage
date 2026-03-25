@@ -1,10 +1,16 @@
 import json
 
 from rest_framework import serializers
+from django.utils import timezone
 
 from reviews.serializers import PublicReviewSerializer
 
-from .models import ProfessionalPaymentAccount, ProfessionalProfile
+from .models import (
+    PractitionerVerification,
+    PractitionerVerificationDecision,
+    ProfessionalPaymentAccount,
+    ProfessionalProfile,
+)
 
 
 class ProfessionalPaymentAccountSerializer(serializers.ModelSerializer):
@@ -23,6 +29,143 @@ class ProfessionalPaymentAccountSerializer(serializers.ModelSerializer):
         )
 
 
+class PractitionerVerificationDecisionSerializer(serializers.ModelSerializer):
+    decided_by_email = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PractitionerVerificationDecision
+        fields = (
+            "id",
+            "from_status",
+            "to_status",
+            "reason",
+            "decided_by_email",
+            "created_at",
+        )
+
+    def get_decided_by_email(self, obj):
+        return getattr(obj.decided_by, "email", "")
+
+
+class PractitionerVerificationSerializer(serializers.ModelSerializer):
+    identity_document_url = serializers.SerializerMethodField()
+    selfie_document_url = serializers.SerializerMethodField()
+    activity_document_url = serializers.SerializerMethodField()
+    liability_insurance_document_url = serializers.SerializerMethodField()
+    iban_document_url = serializers.SerializerMethodField()
+    badge_is_active = serializers.SerializerMethodField()
+    badge_tooltip = serializers.SerializerMethodField()
+    decisions = PractitionerVerificationDecisionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PractitionerVerification
+        fields = (
+            "status",
+            "siren",
+            "siret",
+            "beneficiary_name",
+            "iban_last4",
+            "identity_document",
+            "identity_document_url",
+            "selfie_document",
+            "selfie_document_url",
+            "activity_document",
+            "activity_document_url",
+            "liability_insurance_document",
+            "liability_insurance_document_url",
+            "iban_document",
+            "iban_document_url",
+            "submitted_at",
+            "reviewed_at",
+            "verified_at",
+            "expires_at",
+            "rejection_reason",
+            "internal_notes",
+            "badge_is_active",
+            "badge_tooltip",
+            "decisions",
+        )
+        read_only_fields = (
+            "status",
+            "submitted_at",
+            "reviewed_at",
+            "verified_at",
+            "expires_at",
+            "rejection_reason",
+            "internal_notes",
+            "badge_is_active",
+            "badge_tooltip",
+            "decisions",
+        )
+        extra_kwargs = {
+            "identity_document": {"write_only": True, "required": False},
+            "selfie_document": {"write_only": True, "required": False},
+            "activity_document": {"write_only": True, "required": False},
+            "liability_insurance_document": {"write_only": True, "required": False},
+            "iban_document": {"write_only": True, "required": False},
+            "internal_notes": {"required": False},
+        }
+
+    def get_identity_document_url(self, obj):
+        return self._build_file_url(obj.identity_document)
+
+    def get_selfie_document_url(self, obj):
+        return self._build_file_url(obj.selfie_document)
+
+    def get_activity_document_url(self, obj):
+        return self._build_file_url(obj.activity_document)
+
+    def get_liability_insurance_document_url(self, obj):
+        return self._build_file_url(obj.liability_insurance_document)
+
+    def get_iban_document_url(self, obj):
+        return self._build_file_url(obj.iban_document)
+
+    def get_badge_is_active(self, obj):
+        return obj.badge_is_active
+
+    def get_badge_tooltip(self, _obj):
+        return (
+            "Ce badge signifie qu’une vérification documentaire d’identité "
+            "et/ou d’activité a été effectuée par NUADYX à une date donnée. "
+            "Il ne garantit pas la qualité des prestations."
+        )
+
+    def _build_file_url(self, field):
+        request = self.context.get("request")
+        if not field:
+            return ""
+        url = field.url
+        return request.build_absolute_uri(url) if request else url
+
+    def update(self, instance, validated_data):
+        uploaded_document = False
+        for field in (
+            "identity_document",
+            "selfie_document",
+            "activity_document",
+            "liability_insurance_document",
+            "iban_document",
+        ):
+            if field in validated_data:
+                uploaded_document = True
+                file_value = validated_data.pop(field)
+                current_file = getattr(instance, field)
+                if current_file:
+                    current_file.delete(save=False)
+                setattr(instance, field, file_value)
+
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+
+        if uploaded_document and instance.status == PractitionerVerification.Status.NOT_STARTED:
+            instance.status = PractitionerVerification.Status.PENDING
+            instance.submitted_at = instance.submitted_at or timezone.now()
+
+        instance.save()
+        return instance
+
+
 class PublicProfessionalSerializer(serializers.ModelSerializer):
     profile_photo_url = serializers.SerializerMethodField()
     cover_photo_url = serializers.SerializerMethodField()
@@ -35,6 +178,7 @@ class PublicProfessionalSerializer(serializers.ModelSerializer):
     reviews = serializers.SerializerMethodField()
     review_average = serializers.SerializerMethodField()
     review_count = serializers.SerializerMethodField()
+    verification_badge = serializers.SerializerMethodField()
 
     class Meta:
         model = ProfessionalProfile
@@ -77,6 +221,7 @@ class PublicProfessionalSerializer(serializers.ModelSerializer):
             "reviews",
             "review_average",
             "review_count",
+            "verification_badge",
         )
 
     def get_profile_photo_url(self, obj):
@@ -118,18 +263,33 @@ class PublicProfessionalSerializer(serializers.ModelSerializer):
         return assistant.faq_items if assistant else []
 
     def get_reviews(self, obj):
-        queryset = obj.reviews.filter(status="published").order_by("-published_at", "-created_at")[:6]
+        queryset = obj.reviews.filter(status="approved").order_by("-published_at", "-created_at")[:6]
         return PublicReviewSerializer(queryset, many=True).data
 
     def get_review_average(self, obj):
-        published = obj.reviews.filter(status="published")
+        published = obj.reviews.filter(status="approved")
         if not published.exists():
             return None
         average = sum(review.rating for review in published) / published.count()
         return round(average, 1)
 
     def get_review_count(self, obj):
-        return obj.reviews.filter(status="published").count()
+        return obj.reviews.filter(status="approved").count()
+
+    def get_verification_badge(self, obj):
+        verification = getattr(obj, "verification", None)
+        if not verification or not verification.badge_is_active:
+            return None
+        return {
+            "label": "Praticien vérifié",
+            "verified_at": verification.verified_at,
+            "expires_at": verification.expires_at,
+            "tooltip": (
+                "Ce badge signifie qu’une vérification documentaire d’identité "
+                "et/ou d’activité a été effectuée par NUADYX à une date donnée. "
+                "Il ne garantit pas la qualité des prestations."
+            ),
+        }
 
     def _get_assistant_profile(self, obj):
         try:
@@ -153,6 +313,7 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
     remove_profile_photo = serializers.BooleanField(write_only=True, required=False, default=False)
     remove_cover_photo = serializers.BooleanField(write_only=True, required=False, default=False)
     payment_account = serializers.SerializerMethodField(read_only=True)
+    verification = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ProfessionalProfile
@@ -193,6 +354,7 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
             "profile_photo_url",
             "cover_photo_url",
             "payment_account",
+            "verification",
             "remove_profile_photo",
             "remove_cover_photo",
             "onboarding_step",
@@ -340,3 +502,13 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
         if not account:
             return None
         return ProfessionalPaymentAccountSerializer(account).data
+
+    def get_verification(self, obj):
+        verification, _created = PractitionerVerification.objects.get_or_create(
+            professional=obj
+        )
+        verification.refresh_expired_status()
+        return PractitionerVerificationSerializer(
+            verification,
+            context=self.context,
+        ).data

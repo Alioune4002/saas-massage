@@ -1,9 +1,12 @@
 from django.db import transaction
 from django.utils.text import slugify
 from django.contrib.auth import authenticate
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.authtoken.models import Token
 
+from common.legal import LEGAL_DOCUMENTS, get_required_practitioner_registration_documents
+from common.models import LegalAcceptanceRecord
 from .models import User
 from professionals.models import (
     ProfessionalPaymentAccount,
@@ -75,6 +78,10 @@ class RegisterPractitionerSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirmation = serializers.CharField(write_only=True, min_length=8)
+    accepted_documents = serializers.ListField(
+        child=serializers.CharField(max_length=60),
+        write_only=True,
+    )
 
     def validate_email(self, value: str):
         normalized = value.strip().lower()
@@ -87,6 +94,18 @@ class RegisterPractitionerSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"password_confirmation": "Les mots de passe ne correspondent pas."}
             )
+        required_documents = set(get_required_practitioner_registration_documents())
+        accepted_documents = {slug.strip() for slug in attrs.get("accepted_documents", []) if slug.strip()}
+        missing_documents = sorted(required_documents - accepted_documents)
+        if missing_documents:
+            raise serializers.ValidationError(
+                {
+                    "accepted_documents": (
+                        "Les documents suivants doivent être acceptés avant la création du compte : "
+                        + ", ".join(missing_documents)
+                    )
+                }
+            )
         return attrs
 
     @transaction.atomic
@@ -96,6 +115,7 @@ class RegisterPractitionerSerializer(serializers.Serializer):
         business_name = validated_data["business_name"].strip()
         email = validated_data["email"]
         password = validated_data["password"]
+        accepted_documents = validated_data["accepted_documents"]
 
         username_base = slugify(f"{first_name}-{last_name}") or email.split("@")[0]
         username = self._build_unique_username(username_base)
@@ -131,6 +151,20 @@ class RegisterPractitionerSerializer(serializers.Serializer):
             professional=profile,
             account_email=email,
         )
+
+        for document_slug in accepted_documents:
+            if document_slug not in LEGAL_DOCUMENTS:
+                continue
+            LegalAcceptanceRecord.objects.create(
+                user=user,
+                email_snapshot=email,
+                document_slug=document_slug,
+                document_version=LEGAL_DOCUMENTS[document_slug]["version"],
+                source=LegalAcceptanceRecord.Source.REGISTRATION,
+                accepted_at=timezone.now(),
+                ip_hash=self.context.get("ip_hash", ""),
+                user_agent_hash=self.context.get("user_agent_hash", ""),
+            )
 
         token, _ = Token.objects.get_or_create(user=user)
         return {"user": user, "token": token}

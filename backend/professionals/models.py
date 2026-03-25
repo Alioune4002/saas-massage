@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
 from django.core.validators import MinValueValidator
+from django.utils import timezone
 from pathlib import Path
 from uuid import uuid4
 from decimal import Decimal
@@ -48,6 +49,32 @@ def professional_profile_photo_upload_to(_instance, filename: str) -> str:
 
 def professional_cover_photo_upload_to(_instance, filename: str) -> str:
     return build_professional_media_path(_instance, "cover", filename)
+
+
+def practitioner_verification_upload_to(instance, filename: str, folder: str) -> str:
+    professional_id = str(instance.professional_id or "pending")
+    suffix = Path(filename).suffix.lower() or ".bin"
+    return f"professionals/{professional_id}/verification/{folder}/{uuid4().hex}{suffix}"
+
+
+def verification_identity_document_upload_to(instance, filename: str) -> str:
+    return practitioner_verification_upload_to(instance, filename, "identity")
+
+
+def verification_selfie_upload_to(instance, filename: str) -> str:
+    return practitioner_verification_upload_to(instance, filename, "selfie")
+
+
+def verification_activity_upload_to(instance, filename: str) -> str:
+    return practitioner_verification_upload_to(instance, filename, "activity")
+
+
+def verification_insurance_upload_to(instance, filename: str) -> str:
+    return practitioner_verification_upload_to(instance, filename, "insurance")
+
+
+def verification_iban_upload_to(instance, filename: str) -> str:
+    return practitioner_verification_upload_to(instance, filename, "iban")
 
 
 class ProfessionalProfile(TimeStampedUUIDModel):
@@ -264,3 +291,109 @@ class ProfessionalPaymentAccount(TimeStampedUUIDModel):
 
     def __str__(self) -> str:
         return f"{self.professional.business_name} — {self.get_provider_display()}"
+
+
+class PractitionerVerification(TimeStampedUUIDModel):
+    class Status(models.TextChoices):
+        NOT_STARTED = "not_started", "Non commencé"
+        PENDING = "pending", "En attente"
+        IN_REVIEW = "in_review", "En revue"
+        VERIFIED = "verified", "Vérifié"
+        REJECTED = "rejected", "Refusé"
+        EXPIRED = "expired", "Expiré"
+
+    professional = models.OneToOneField(
+        ProfessionalProfile,
+        on_delete=models.CASCADE,
+        related_name="verification",
+    )
+    status = models.CharField(
+        "statut KYC",
+        max_length=20,
+        choices=Status.choices,
+        default=Status.NOT_STARTED,
+    )
+    siren = models.CharField("SIREN", max_length=20, blank=True)
+    siret = models.CharField("SIRET", max_length=20, blank=True)
+    beneficiary_name = models.CharField("bénéficiaire", max_length=180, blank=True)
+    iban_last4 = models.CharField("4 derniers chiffres IBAN", max_length=4, blank=True)
+    identity_document = models.FileField(
+        "pièce d'identité",
+        upload_to=verification_identity_document_upload_to,
+        blank=True,
+    )
+    selfie_document = models.FileField(
+        "selfie de vérification",
+        upload_to=verification_selfie_upload_to,
+        blank=True,
+    )
+    activity_document = models.FileField(
+        "justificatif d'activité",
+        upload_to=verification_activity_upload_to,
+        blank=True,
+    )
+    liability_insurance_document = models.FileField(
+        "attestation RC Pro",
+        upload_to=verification_insurance_upload_to,
+        blank=True,
+    )
+    iban_document = models.FileField(
+        "justificatif bancaire",
+        upload_to=verification_iban_upload_to,
+        blank=True,
+    )
+    submitted_at = models.DateTimeField("soumis le", null=True, blank=True)
+    reviewed_at = models.DateTimeField("revue le", null=True, blank=True)
+    verified_at = models.DateTimeField("vérifié le", null=True, blank=True)
+    expires_at = models.DateTimeField("expire le", null=True, blank=True)
+    rejection_reason = models.CharField("motif de refus", max_length=280, blank=True)
+    internal_notes = models.TextField("notes internes", blank=True)
+
+    class Meta:
+        verbose_name = "vérification praticien"
+        verbose_name_plural = "vérifications praticiens"
+
+    def __str__(self) -> str:
+        return f"{self.professional.business_name} — {self.get_status_display()}"
+
+    @property
+    def badge_is_active(self) -> bool:
+        if self.status != self.Status.VERIFIED:
+            return False
+        if self.expires_at and self.expires_at <= timezone.now():
+            return False
+        return True
+
+    def refresh_expired_status(self, *, save: bool = True) -> bool:
+        if self.status == self.Status.VERIFIED and self.expires_at and self.expires_at <= timezone.now():
+            self.status = self.Status.EXPIRED
+            if save:
+                self.save(update_fields=["status", "updated_at"])
+            return True
+        return False
+
+
+class PractitionerVerificationDecision(TimeStampedUUIDModel):
+    verification = models.ForeignKey(
+        PractitionerVerification,
+        on_delete=models.CASCADE,
+        related_name="decisions",
+    )
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="practitioner_verification_decisions",
+    )
+    from_status = models.CharField("ancien statut", max_length=20, blank=True)
+    to_status = models.CharField("nouveau statut", max_length=20)
+    reason = models.CharField("motif", max_length=280, blank=True)
+
+    class Meta:
+        verbose_name = "décision de vérification"
+        verbose_name_plural = "décisions de vérification"
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.verification.professional.business_name} → {self.to_status}"

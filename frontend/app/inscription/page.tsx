@@ -7,11 +7,13 @@ import { motion } from "framer-motion";
 import { ArrowRight, CheckCircle2, UserPlus2 } from "lucide-react";
 
 import { NuadyxLogo } from "@/components/brand/nuadyx-logo";
+import { LegalLinks } from "@/components/legal/legal-links";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FieldWrapper, Input } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { PRACTITIONER_REQUIRED_DOCUMENTS } from "@/content/legal-documents";
 import { registerPractitioner } from "@/lib/api";
 import { getAuthenticatedHomePath, hydrateSession } from "@/lib/auth";
 import { fadeInUp, staggerContainer } from "@/lib/motion";
@@ -28,6 +30,7 @@ export default function RegisterPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [acceptedDocuments, setAcceptedDocuments] = useState<string[]>([]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,7 +38,16 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const result = await registerPractitioner(form);
+      if (acceptedDocuments.length !== PRACTITIONER_REQUIRED_DOCUMENTS.length) {
+        throw new Error(
+          "Les CGU, CGV, le contrat praticien et la politique de confidentialité doivent être acceptés."
+        );
+      }
+
+      const result = await registerPractitioner({
+        ...form,
+        accepted_documents: acceptedDocuments,
+      });
       const user = await hydrateSession(result.token);
       router.push(getAuthenticatedHomePath(user));
     } catch (err) {
@@ -222,6 +234,60 @@ export default function RegisterPage() {
                   </FieldWrapper>
                 </div>
 
+                <div className="rounded-[1.3rem] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-4">
+                  <p className="text-sm font-medium text-[var(--foreground)]">
+                    Documents à accepter
+                  </p>
+                  <div className="mt-3 space-y-3 text-sm text-[var(--foreground-muted)]">
+                    {[
+                      {
+                        slug: "cgu",
+                        label: "J’accepte les CGU",
+                        href: "/cgu",
+                      },
+                      {
+                        slug: "cgv",
+                        label: "J’accepte les CGV",
+                        href: "/cgv",
+                      },
+                      {
+                        slug: "contrat-praticien",
+                        label: "J’accepte le contrat praticien",
+                        href: "/contrat-praticien",
+                      },
+                      {
+                        slug: "confidentialite",
+                        label: "J’ai lu la politique de confidentialité",
+                        href: "/confidentialite",
+                      },
+                    ].map((item) => (
+                      <label key={item.slug} className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={acceptedDocuments.includes(item.slug)}
+                          onChange={(event) =>
+                            setAcceptedDocuments((current) =>
+                              event.target.checked
+                                ? Array.from(new Set([...current, item.slug]))
+                                : current.filter((slug) => slug !== item.slug)
+                            )
+                          }
+                        />
+                        <span>
+                          {item.label}{" "}
+                          <Link
+                            href={item.href}
+                            target="_blank"
+                            className="font-medium text-[var(--primary)]"
+                          >
+                            Consulter
+                          </Link>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
                 {error ? <Notice tone="error">{error}</Notice> : null}
 
                 <Button
@@ -241,6 +307,7 @@ export default function RegisterPage() {
                   Se connecter
                 </Link>
               </div>
+              <LegalLinks className="mt-6" />
             </Card>
           </motion.section>
         </motion.div>

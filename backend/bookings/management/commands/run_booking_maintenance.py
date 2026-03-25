@@ -6,6 +6,7 @@ from bookings.payments import (
     process_overdue_service_validations,
     process_releasable_payouts,
 )
+from professionals.verification import expire_outdated_verifications
 
 
 class Command(BaseCommand):
@@ -17,6 +18,7 @@ class Command(BaseCommand):
         parser.add_argument("--release-payouts", action="store_true")
         parser.add_argument("--audit-anomalies", action="store_true")
         parser.add_argument("--fix-anomalies", action="store_true")
+        parser.add_argument("--expire-verifications", action="store_true")
 
     def handle(self, *args, **options):
         selected = any(
@@ -26,6 +28,7 @@ class Command(BaseCommand):
                 "auto_validate_services",
                 "release_payouts",
                 "audit_anomalies",
+                "expire_verifications",
             )
         )
 
@@ -33,6 +36,7 @@ class Command(BaseCommand):
         run_auto_validate = options["auto_validate_services"] or not selected
         run_release = options["release_payouts"] or not selected
         run_audit = options["audit_anomalies"] or not selected or options["fix_anomalies"]
+        run_expire_verifications = options["expire_verifications"] or not selected
 
         summary = []
         if run_expire:
@@ -55,6 +59,10 @@ class Command(BaseCommand):
                 f"Anomalies détectées : {len(anomalies)}"
                 + (" (correction automatique activée)" if options["fix_anomalies"] else "")
             )
+
+        if run_expire_verifications:
+            expired_verifications = expire_outdated_verifications()
+            summary.append(f"Vérifications expirées : {expired_verifications}")
 
         for line in summary:
             self.stdout.write(self.style.SUCCESS(line))

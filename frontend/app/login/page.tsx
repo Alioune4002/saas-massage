@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, LockKeyhole, Sparkles } from "lucide-react";
 
 import { NuadyxLogo } from "@/components/brand/nuadyx-logo";
+import { LegalLinks } from "@/components/legal/legal-links";
 import { useBackendStatus } from "@/components/providers/backend-status-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -198,6 +199,7 @@ export default function LoginPage() {
                 <Sparkles className="h-4.5 w-4.5 text-[var(--primary)]" />
                 Interface haut de gamme, pensée pour un usage quotidien.
               </div>
+              <LegalLinks className="mt-6" />
             </Card>
           </motion.section>
         </motion.div>

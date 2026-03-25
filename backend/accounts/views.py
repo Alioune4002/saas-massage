@@ -1,3 +1,5 @@
+import hashlib
+
 from rest_framework import permissions, status
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
@@ -59,7 +61,18 @@ class RegisterPractitionerView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        serializer = RegisterPractitionerSerializer(data=request.data)
+        client_ip = (
+            request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+            or request.META.get("REMOTE_ADDR", "")
+        )
+        user_agent = request.META.get("HTTP_USER_AGENT", "")
+        serializer = RegisterPractitionerSerializer(
+            data=request.data,
+            context={
+                "ip_hash": hashlib.sha256(client_ip.encode()).hexdigest() if client_ip else "",
+                "user_agent_hash": hashlib.sha256(user_agent.encode()).hexdigest() if user_agent else "",
+            },
+        )
         serializer.is_valid(raise_exception=True)
         result = serializer.save()
         send_practitioner_welcome_email(result["user"].professional_profile)

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { NuadyxLogo } from "@/components/brand/nuadyx-logo";
+import { LegalLinks } from "@/components/legal/legal-links";
 
 export function SiteFooter() {
   const pathname = usePathname();
@@ -28,26 +29,7 @@ export function SiteFooter() {
           <p className="text-sm font-semibold text-[var(--foreground)]">
             Liens utiles
           </p>
-          <div className="mt-3 space-y-2 text-sm text-[var(--foreground-muted)]">
-            <Link
-              href="/mentions-legales"
-              className="block transition hover:text-[var(--foreground)]"
-            >
-              Mentions légales
-            </Link>
-            <Link
-              href="/politique-confidentialite"
-              className="block transition hover:text-[var(--foreground)]"
-            >
-              Politique de confidentialité
-            </Link>
-            <Link
-              href="/cgv"
-              className="block transition hover:text-[var(--foreground)]"
-            >
-              Conditions générales de vente
-            </Link>
-          </div>
+          <LegalLinks className="mt-3" />
         </div>
 
         <div>

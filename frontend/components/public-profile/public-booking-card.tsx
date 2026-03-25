@@ -2,6 +2,7 @@
 
 import { CalendarClock, CheckCircle2 } from "lucide-react";
 
+import { LegalLinks } from "@/components/legal/legal-links";
 import { useBackendStatus } from "@/components/providers/backend-status-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -355,6 +356,8 @@ export function PublicBookingCard({
           >
             {submitting ? "Traitement..." : `6. ${paymentPreview.buttonLabel}`}
           </Button>
+
+          <LegalLinks className="pt-2" />
         </form>
       </div>
     </Card>

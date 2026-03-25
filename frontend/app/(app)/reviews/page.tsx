@@ -15,6 +15,7 @@ import {
   flagReview,
   getReviewInvitations,
   getReviews,
+  respondToReview,
   getTrustedClients,
   type ReviewInvitation,
   type ReviewPractitionerItem,
@@ -110,6 +111,29 @@ export default function ReviewsPage() {
         err instanceof Error
           ? err.message
           : "Impossible de signaler cet avis."
+      );
+    }
+  }
+
+  async function handleRespondToReview(id: string) {
+    const response =
+      window.prompt("Rédigez une réponse publique courte et professionnelle.") || "";
+    if (!response.trim()) {
+      return;
+    }
+
+    try {
+      setError("");
+      const review = await respondToReview(id, response);
+      setReviews((current) =>
+        current.map((item) => (item.id === id ? review : item))
+      );
+      setNotice("La réponse publique a été ajoutée.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Impossible d’ajouter cette réponse."
       );
     }
   }
@@ -303,29 +327,49 @@ export default function ReviewsPage() {
                   <p className="mt-2 text-sm leading-6 text-[var(--foreground-muted)]">
                     {review.comment}
                   </p>
-                  <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--foreground-subtle)]">
-                    {review.verification_label} ·{" "}
-                    {review.status === "published"
-                      ? "Publié"
-                      : review.status === "flagged"
-                        ? "À vérifier"
+                    <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--foreground-subtle)]">
+                      {review.verification_label} ·{" "}
+                    {review.status === "approved"
+                      ? "Approuvé"
+                      : review.status === "hidden"
+                        ? "Masqué"
                         : review.status === "rejected"
                           ? "Refusé"
                           : "En attente"}
+                      {review.experience_date
+                        ? ` · expérience du ${new Date(review.experience_date).toLocaleDateString("fr-FR")}`
+                        : ""}
                   </p>
                   {review.flag_reason ? (
                     <p className="mt-2 text-sm leading-6 text-[var(--warning)]">
                       {review.flag_reason}
                     </p>
                   ) : null}
-                  {review.status !== "flagged" ? (
-                    <div className="mt-3">
+                  {review.practitioner_response ? (
+                    <div className="mt-3 rounded-[1rem] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-3">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--foreground-subtle)]">
+                        Votre réponse publique
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--foreground-muted)]">
+                        {review.practitioner_response}
+                      </p>
+                    </div>
+                  ) : null}
+                  {review.status !== "hidden" ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleFlagReview(review.id)}
                       >
                         Signaler pour vérification
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRespondToReview(review.id)}
+                      >
+                        Répondre publiquement
                       </Button>
                     </div>
                   ) : null}

@@ -80,6 +80,7 @@ class ReviewSubmissionTests(TestCase):
             client_last_name="Martin",
             client_email="alice@example.com",
             status=Booking.Status.CONFIRMED,
+            fulfillment_status=Booking.FulfillmentStatus.COMPLETED_BY_PRACTITIONER,
         )
 
     def test_review_invitation_token_can_only_be_used_once(self):
@@ -132,7 +133,7 @@ class ReviewSubmissionTests(TestCase):
             author_name="Alice",
             rating=3,
             comment="Avis à vérifier",
-            status=Review.Status.PUBLISHED,
+            status=Review.Status.APPROVED,
             verification_type=Review.VerificationType.BOOKED_ON_PLATFORM,
         )
         token = Token.objects.create(user=self.user)
@@ -147,7 +148,7 @@ class ReviewSubmissionTests(TestCase):
 
         review.refresh_from_db()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(review.status, Review.Status.FLAGGED)
+        self.assertEqual(review.status, Review.Status.PENDING)
         self.assertTrue(review.flag_reason)
 
 

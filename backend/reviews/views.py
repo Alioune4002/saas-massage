@@ -9,9 +9,10 @@ from rest_framework.views import APIView
 
 from common.communications import send_review_invitation_email
 from common.permissions import HasProfessionalProfile, IsProfessionalUser
-from .models import Review, ReviewInvitation
+from .models import Review, ReviewInvitation, ReviewModerationLog
 from .serializers import (
     ProfessionalReviewSerializer,
+    ReviewResponseSerializer,
     PublicReviewSerializer,
     PublicReviewSubmissionSerializer,
     ReviewFlagSerializer,
@@ -76,7 +77,7 @@ class PublicReviewListView(generics.ListAPIView):
         return Review.objects.filter(
             professional__slug=slug,
             professional__is_public=True,
-            status=Review.Status.PUBLISHED,
+            status=Review.Status.APPROVED,
         ).order_by("-published_at", "-created_at")
 
 
@@ -120,11 +121,40 @@ class ProfessionalReviewFlagView(APIView):
         )
         serializer = ReviewFlagSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        if review.status == Review.Status.FLAGGED:
+        if review.status in {Review.Status.PENDING, Review.Status.HIDDEN}:
             raise ValidationError("Cet avis est déjà signalé.")
 
-        review.status = Review.Status.FLAGGED
+        review.status = Review.Status.PENDING
         review.flag_reason = serializer.validated_data["reason"]
         review.moderation_flags = list(dict.fromkeys([*review.moderation_flags, "reported_by_practitioner"]))
         review.save(update_fields=["status", "flag_reason", "moderation_flags", "flagged_at", "updated_at"])
+        ReviewModerationLog.objects.create(
+            review=review,
+            action=ReviewModerationLog.Action.FLAGGED,
+            operator=request.user,
+            reason=review.flag_reason,
+            metadata={"flags": review.moderation_flags},
+        )
+        return Response(ProfessionalReviewSerializer(review).data)
+
+
+class ProfessionalReviewResponseView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsProfessionalUser, HasProfessionalProfile]
+
+    def post(self, request, review_id):
+        review = generics.get_object_or_404(
+            Review,
+            id=review_id,
+            professional=request.user.professional_profile,
+        )
+        serializer = ReviewResponseSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        review.practitioner_response = serializer.validated_data["response"].strip()
+        review.save(update_fields=["practitioner_response", "practitioner_responded_at", "updated_at"])
+        ReviewModerationLog.objects.create(
+            review=review,
+            action=ReviewModerationLog.Action.RESPONSE_ADDED,
+            operator=request.user,
+            reason="Réponse praticien ajoutée.",
+        )
         return Response(ProfessionalReviewSerializer(review).data)
