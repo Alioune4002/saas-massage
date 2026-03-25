@@ -15,7 +15,7 @@ export function DashboardPreview() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(124,156,255,0.16),transparent_26%),radial-gradient(circle_at_bottom_left,rgba(143,242,203,0.14),transparent_24%)]" />
       <div className="relative">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.26em] text-[var(--primary)]/80">
               Interface pro
             </p>
@@ -33,7 +33,7 @@ export function DashboardPreview() {
               className="rounded-[1.4rem] border border-[var(--border)] bg-[var(--surface-muted)] p-4"
             >
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-[var(--foreground-subtle)]">
+                <p className="min-w-0 text-sm text-[var(--foreground-subtle)]">
                   {item.label}
                 </p>
                 <item.icon className="h-4.5 w-4.5 text-[var(--primary)]" />
@@ -63,7 +63,7 @@ export function DashboardPreview() {
                   key={`${time}-${title}`}
                   className="flex items-center justify-between gap-4 rounded-[1.2rem] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-medium text-[var(--foreground)]">
                       {title}
                     </p>

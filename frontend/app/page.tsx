@@ -104,24 +104,28 @@ export default function HomePage() {
               pensée pour le massage et le bien-être.
             </p>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link href="/inscription">
-                <Button size="lg" iconRight={<ArrowRight className="h-4 w-4" />}>
+            <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:flex xl:flex-wrap">
+              <Link href="/inscription" className="w-full xl:w-auto">
+                <Button
+                  size="lg"
+                  className="w-full xl:w-auto"
+                  iconRight={<ArrowRight className="h-4 w-4" />}
+                >
                   Créer mon espace
                 </Button>
               </Link>
-              <Link href="/praticiens">
-                <Button variant="secondary" size="lg">
+              <Link href="/praticiens" className="w-full xl:w-auto">
+                <Button variant="secondary" size="lg" className="w-full xl:w-auto">
                   Découvrir un exemple de page praticien
                 </Button>
               </Link>
-              <a href="#overview">
-                <Button variant="ghost" size="lg">
+              <a href="#overview" className="w-full xl:w-auto">
+                <Button variant="ghost" size="lg" className="w-full xl:w-auto">
                   Découvrir la plateforme
                 </Button>
               </a>
-              <Link href="/login">
-                <Button variant="secondary" size="lg">
+              <Link href="/login" className="w-full xl:w-auto">
+                <Button variant="secondary" size="lg" className="w-full xl:w-auto">
                   Se connecter
                 </Button>
               </Link>
@@ -319,14 +323,16 @@ export default function HomePage() {
               Plateforme premium pour professionnels du massage et du bien-être.
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <Link href="/login">
-              <Button variant="secondary" size="md">
+          <div className="grid gap-3 sm:grid-cols-2 md:flex">
+            <Link href="/login" className="w-full md:w-auto">
+              <Button variant="secondary" size="md" className="w-full md:w-auto">
                 Se connecter
               </Button>
             </Link>
-            <Link href="/inscription">
-              <Button size="md">Créer mon espace</Button>
+            <Link href="/inscription" className="w-full md:w-auto">
+              <Button size="md" className="w-full md:w-auto">
+                Créer mon espace
+              </Button>
             </Link>
           </div>
         </div>

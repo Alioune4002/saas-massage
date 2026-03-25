@@ -7,9 +7,14 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 export function SiteHeader() {
   return (
     <header className="sticky top-0 z-30 px-4 py-4 md:px-6">
-      <div className="glass-panel mx-auto flex max-w-7xl items-center justify-between gap-4 rounded-[1.8rem] px-4 py-3 md:px-5">
-        <Link href="/" className="shrink-0">
-          <NuadyxLogo showText priority />
+      <div className="glass-panel mx-auto flex max-w-7xl items-center justify-between gap-3 overflow-hidden rounded-[1.8rem] px-4 py-3 md:px-5">
+        <Link href="/" className="min-w-0 shrink">
+          <span className="sm:hidden">
+            <NuadyxLogo priority />
+          </span>
+          <span className="hidden sm:inline-flex">
+            <NuadyxLogo showText priority />
+          </span>
         </Link>
 
         <nav className="hidden items-center gap-6 text-sm text-[var(--foreground-muted)] lg:flex">
@@ -27,13 +32,15 @@ export function SiteHeader() {
           </a>
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <ThemeToggle compact />
-          <Link href="/inscription" className="hidden sm:inline-flex">
-            <Button size="md">Créer mon espace</Button>
+          <Link href="/inscription" className="hidden md:inline-flex">
+            <Button size="md" className="whitespace-nowrap">
+              Créer mon espace
+            </Button>
           </Link>
           <Link href="/login">
-            <Button variant="secondary" size="md">
+            <Button variant="secondary" size="md" className="whitespace-nowrap">
               Se connecter
             </Button>
           </Link>

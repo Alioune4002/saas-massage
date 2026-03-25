@@ -28,9 +28,9 @@ export const metadata: Metadata = {
   description:
     "NUADYX, la plateforme SaaS premium pour piloter une activité de massage et de bien-être.",
   icons: {
-    icon: "/images/icon.ico",
-    shortcut: "/images/icon.ico",
-    apple: "/images/icon.jpg",
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.jpg",
   },
   openGraph: {
     title: "NUADYX",

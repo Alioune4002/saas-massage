@@ -169,6 +169,17 @@ export async function probeBackendAvailability() {
   }
 }
 
+async function isBackendReachable() {
+  try {
+    const response = await fetch(`${getApiOrigin()}/health/`, {
+      cache: "no-store",
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 type RequestOptions = RequestInit & {
   auth?: boolean;
 };
@@ -203,10 +214,25 @@ export async function apiRequest<T>(
       cache: "no-store",
     });
   } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError("La requête a été interrompue.", 0, null);
+    }
+
     const reason =
       error instanceof Error
         ? error.message
         : "Connexion impossible avec le serveur.";
+
+    const backendReachable = await isBackendReachable();
+    if (backendReachable) {
+      broadcastApiAvailability(true);
+      throw new ApiError(
+        "La requête n’a pas pu aboutir correctement. Réessaie dans quelques instants.",
+        0,
+        { reason }
+      );
+    }
+
     broadcastApiAvailability(false, reason);
     throw new ApiUnavailableError(
       "Service temporairement indisponible. Réessaie dans quelques instants.",
