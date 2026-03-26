@@ -13,6 +13,7 @@ import type {
   CreatePublicBookingPayload,
   PublicBookingCreated,
   PublicAvailability,
+  PublicBookingVerificationPending,
   PublicService,
 } from "@/lib/api";
 import { buildPublicPaymentPreview } from "@/lib/payments";
@@ -33,12 +34,17 @@ type PublicBookingCardProps = {
   bookingForm: BookingForm;
   bookingError: string;
   bookingReceipt: PublicBookingCreated | null;
+  verificationPending: PublicBookingVerificationPending | null;
+  verificationCode: string;
   paymentPreview: ReturnType<typeof buildPublicPaymentPreview>;
   submitting: boolean;
   onSelectService: (serviceId: string) => void;
   onSelectSlot: (slotId: string) => void;
-  onBookingFormChange: (field: keyof BookingForm, value: string) => void;
+  onBookingFormChange: (field: keyof BookingForm, value: string | boolean) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  onVerificationCodeChange: (value: string) => void;
+  onSubmitVerification: () => void;
+  onResendVerification: () => void;
 };
 
 export function PublicBookingCard({
@@ -51,12 +57,17 @@ export function PublicBookingCard({
   bookingForm,
   bookingError,
   bookingReceipt,
+  verificationPending,
+  verificationCode,
   paymentPreview,
   submitting,
   onSelectService,
   onSelectSlot,
   onBookingFormChange,
   onSubmit,
+  onVerificationCodeChange,
+  onSubmitVerification,
+  onResendVerification,
 }: PublicBookingCardProps) {
   const { backendUnavailable } = useBackendStatus();
   const selectedService =
@@ -261,11 +272,58 @@ export function PublicBookingCard({
             />
           </FieldWrapper>
 
+          <div className="rounded-[1.35rem] border border-[var(--border)] bg-[var(--background-soft)] p-4">
+            <p className="text-sm font-medium text-[var(--foreground)]">
+              4. Consentements
+            </p>
+            <div className="mt-3 space-y-3 text-sm text-[var(--foreground-muted)]">
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={bookingForm.accept_cgu}
+                  onChange={(event) =>
+                    onBookingFormChange("accept_cgu", event.target.checked)
+                  }
+                  disabled={bookingDisabled}
+                />
+                <span>J’accepte les conditions générales d’utilisation.</span>
+              </label>
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={bookingForm.accept_cgv}
+                  onChange={(event) =>
+                    onBookingFormChange("accept_cgv", event.target.checked)
+                  }
+                  disabled={bookingDisabled}
+                />
+                <span>J’accepte les conditions générales de vente.</span>
+              </label>
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={bookingForm.accept_cancellation_policy}
+                  onChange={(event) =>
+                    onBookingFormChange(
+                      "accept_cancellation_policy",
+                      event.target.checked
+                    )
+                  }
+                  disabled={bookingDisabled}
+                />
+                <span>J’ai lu la politique d’annulation et de remboursement.</span>
+              </label>
+            </div>
+          </div>
+
           {selectedService || selectedSlot ? (
             <div className="rounded-[1.4rem] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-4">
               <div className="flex items-center gap-2 text-[var(--foreground)]">
                 <CheckCircle2 className="h-4 w-4 text-[var(--primary)]" />
-                <p className="text-sm font-medium">4. Récapitulatif</p>
+                <p className="text-sm font-medium">5. Récapitulatif</p>
               </div>
               <div className="mt-3 space-y-2 text-sm text-[var(--foreground-muted)]">
                 {selectedService ? (
@@ -300,6 +358,46 @@ export function PublicBookingCard({
           ) : null}
 
           {bookingError ? <Notice tone="error">{bookingError}</Notice> : null}
+          {verificationPending ? (
+            <Notice tone="info">
+              <div className="space-y-3">
+                <p className="font-medium">
+                  Vérifiez votre email pour finaliser cette réservation
+                </p>
+                <p className="text-sm leading-6 opacity-90">
+                  Un code a été envoyé à {verificationPending.masked_email}.
+                  Tant que ce code n’est pas validé, aucun rendez-vous n’est créé.
+                </p>
+                <FieldWrapper label="Code de vérification">
+                  <Input
+                    value={verificationCode}
+                    onChange={(event) =>
+                      onVerificationCodeChange(event.target.value)
+                    }
+                    disabled={submitting}
+                    placeholder="Entrez le code reçu"
+                  />
+                </FieldWrapper>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    onClick={onSubmitVerification}
+                    disabled={submitting || verificationCode.trim().length < 4}
+                  >
+                    Vérifier mon email
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={onResendVerification}
+                    disabled={submitting}
+                  >
+                    Renvoyer un code
+                  </Button>
+                </div>
+              </div>
+            </Notice>
+          ) : null}
           {bookingReceipt ? (
             <Notice tone="success">
               <div className="space-y-2">
@@ -330,7 +428,7 @@ export function PublicBookingCard({
             <div className="rounded-[1.4rem] border border-[var(--border)] bg-[var(--background-soft)] px-4 py-4">
               <div className="flex items-center gap-2 text-[var(--foreground)]">
                 <CheckCircle2 className="h-4 w-4 text-[var(--primary)]" />
-                <p className="text-sm font-medium">5. Règlement à la réservation</p>
+                <p className="text-sm font-medium">6. Règlement à la réservation</p>
               </div>
               <div className="mt-3 space-y-2 text-sm leading-6 text-[var(--foreground-muted)]">
                 <p className="font-medium">{paymentPreview.title}</p>
@@ -354,7 +452,7 @@ export function PublicBookingCard({
             className="w-full"
             disabled={bookingDisabled || submitting}
           >
-            {submitting ? "Traitement..." : `6. ${paymentPreview.buttonLabel}`}
+            {submitting ? "Traitement..." : `7. ${paymentPreview.buttonLabel}`}
           </Button>
 
           <LegalLinks className="pt-2" />

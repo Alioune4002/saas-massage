@@ -1,17 +1,25 @@
 import json
+from decimal import Decimal
 
+from django.conf import settings
 from rest_framework import serializers
 from django.utils import timezone
 
 from reviews.serializers import PublicReviewSerializer
 
 from .models import (
+    ContactPrivateNote,
+    ContactTag,
     DirectoryInterestLead,
     DirectoryProfileCandidate,
     DirectoryProfileClaimRequest,
     DirectoryProfileRemovalRequest,
+    FavoritePractitioner,
+    GuestFavoriteCollection,
+    LocationIndex,
     PractitionerVerification,
     PractitionerVerificationDecision,
+    PractitionerContact,
     ProfessionalPaymentAccount,
     ProfessionalProfile,
 )
@@ -468,6 +476,80 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
     def validate_cover_photo(self, value):
         return self._validate_image_file(value, "photo de couverture")
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        instance = self.instance
+        reservation_payment_mode = attrs.get(
+            "reservation_payment_mode",
+            getattr(instance, "reservation_payment_mode", ProfessionalProfile.ReservationPaymentMode.NONE),
+        )
+        deposit_value_type = attrs.get(
+            "deposit_value_type",
+            getattr(instance, "deposit_value_type", ProfessionalProfile.DepositValueType.PERCENTAGE),
+        )
+        deposit_value = Decimal(
+            str(
+                attrs.get(
+                    "deposit_value",
+                    getattr(instance, "deposit_value", Decimal("0.00")),
+                )
+            )
+        )
+        verification = getattr(instance, "verification", None) if instance else None
+        is_verified = bool(verification and verification.badge_is_active)
+        unverified_cap = Decimal(
+            str(
+                getattr(
+                    settings,
+                    "NUADYX_UNVERIFIED_PRACTITIONER_MAX_DEPOSIT_PERCENTAGE",
+                    "20.00",
+                )
+            )
+        )
+        max_cap = Decimal(str(getattr(settings, "NUADYX_MAX_DEPOSIT_PERCENTAGE", "50.00")))
+
+        if reservation_payment_mode == ProfessionalProfile.ReservationPaymentMode.FULL and not is_verified:
+            raise serializers.ValidationError(
+                {
+                    "reservation_payment_mode": (
+                        "Le paiement total à la réservation est réservé aux praticiens vérifiés."
+                    )
+                }
+            )
+
+        if reservation_payment_mode == ProfessionalProfile.ReservationPaymentMode.DEPOSIT:
+            if deposit_value_type != ProfessionalProfile.DepositValueType.PERCENTAGE:
+                raise serializers.ValidationError(
+                    {
+                        "deposit_value_type": (
+                            "NUADYX v1 limite l’acompte à des pourcentages encadrés."
+                        )
+                    }
+                )
+            allowed_options = {Decimal("20.00"), Decimal("30.00"), Decimal("50.00")}
+            if deposit_value not in allowed_options:
+                raise serializers.ValidationError(
+                    {
+                        "deposit_value": "Choisissez un acompte NUADYX parmi 20 %, 30 % ou 50 %."
+                    }
+                )
+            if not is_verified and deposit_value > unverified_cap:
+                raise serializers.ValidationError(
+                    {
+                        "deposit_value": (
+                            f"Un praticien non vérifié ne peut pas dépasser {unverified_cap} % d’acompte."
+                        )
+                    }
+                )
+            if deposit_value > max_cap:
+                raise serializers.ValidationError(
+                    {
+                        "deposit_value": f"L’acompte ne peut pas dépasser {max_cap} %."
+                    }
+                )
+
+        return attrs
+
     def _validate_image_file(self, value, field_label: str):
         content_type = getattr(value, "content_type", "")
         if content_type and not content_type.startswith("image/"):
@@ -653,3 +735,192 @@ class DirectoryInterestLeadSerializer(serializers.ModelSerializer):
             "message",
             "source_page",
         )
+
+
+class DirectoryInterestLeadAdminSerializer(serializers.ModelSerializer):
+    kind_label = serializers.CharField(source="get_kind_display", read_only=True)
+
+    class Meta:
+        model = DirectoryInterestLead
+        fields = (
+            "id",
+            "kind",
+            "kind_label",
+            "full_name",
+            "email",
+            "city",
+            "practitioner_name",
+            "message",
+            "source_page",
+            "processed",
+            "created_at",
+            "updated_at",
+        )
+
+
+class FavoritePractitionerSerializer(serializers.ModelSerializer):
+    business_name = serializers.CharField(source="professional.business_name")
+    slug = serializers.CharField(source="professional.slug")
+    city = serializers.CharField(source="professional.city")
+    public_headline = serializers.CharField(source="professional.public_headline")
+    profile_photo_url = serializers.SerializerMethodField()
+    verification_badge = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FavoritePractitioner
+        fields = (
+            "id",
+            "business_name",
+            "slug",
+            "city",
+            "public_headline",
+            "profile_photo_url",
+            "verification_badge",
+            "created_at",
+        )
+
+    def get_profile_photo_url(self, obj):
+        request = self.context.get("request")
+        if not obj.professional.profile_photo:
+            return ""
+        url = obj.professional.profile_photo.url
+        return request.build_absolute_uri(url) if request else url
+
+    def get_verification_badge(self, obj):
+        try:
+            verification = obj.professional.verification
+        except PractitionerVerification.DoesNotExist:
+            verification = None
+        if not verification or not verification.badge_is_active:
+            return None
+        return {
+            "label": "Praticien vérifié",
+            "verified_at": verification.verified_at,
+            "expires_at": verification.expires_at,
+            "tooltip": (
+                "Ce badge signifie qu’une vérification documentaire d’identité "
+                "et/ou d’activité a été effectuée par NUADYX à une date donnée. "
+                "Il ne garantit pas la qualité des prestations."
+            ),
+        }
+
+
+class GuestFavoriteCollectionSerializer(serializers.ModelSerializer):
+    favorites = FavoritePractitionerSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = GuestFavoriteCollection
+        fields = (
+            "id",
+            "email",
+            "access_token",
+            "favorites",
+            "created_at",
+            "updated_at",
+        )
+
+
+class LocationSuggestionSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=LocationIndex.LocationType.choices)
+    label = serializers.CharField()
+    slug = serializers.CharField()
+    city = serializers.CharField(allow_blank=True)
+    postal_code = serializers.CharField(allow_blank=True)
+    department_name = serializers.CharField(allow_blank=True)
+    region = serializers.CharField(allow_blank=True)
+    country = serializers.CharField(allow_blank=True)
+    directory_url = serializers.CharField()
+
+
+class ContactTagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactTag
+        fields = ("id", "label", "created_at")
+
+
+class ContactPrivateNoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactPrivateNote
+        fields = ("content", "updated_at")
+
+
+class PractitionerContactSerializer(serializers.ModelSerializer):
+    display_name = serializers.CharField(read_only=True)
+    segment_label = serializers.CharField(source="get_segment_display", read_only=True)
+    risk_label = serializers.CharField(source="get_risk_level_display", read_only=True)
+    private_note = serializers.SerializerMethodField()
+    tags = ContactTagSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PractitionerContact
+        fields = (
+            "id",
+            "display_name",
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "booking_count",
+            "validated_booking_count",
+            "canceled_booking_count",
+            "no_show_count",
+            "disputed_booking_count",
+            "first_booking_at",
+            "last_booking_at",
+            "last_validated_at",
+            "segment",
+            "segment_label",
+            "segment_score",
+            "segment_reasons_json",
+            "risk_level",
+            "risk_label",
+            "is_trusted",
+            "private_note",
+            "tags",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_private_note(self, obj):
+        note = getattr(obj, "private_note", None)
+        if not note:
+            return ""
+        return note.content
+
+
+class PractitionerContactUpdateSerializer(serializers.Serializer):
+    private_note = serializers.CharField(required=False, allow_blank=True, max_length=600)
+    tag_labels = serializers.ListField(
+        child=serializers.CharField(max_length=40),
+        required=False,
+        allow_empty=True,
+    )
+    is_trusted = serializers.BooleanField(required=False)
+
+    def validate_tag_labels(self, value):
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            label = " ".join(str(item).split()).strip()
+            if not label:
+                continue
+            key = label.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(label[:40])
+        return cleaned[:8]
+
+
+class CityCoverageMetricSerializer(serializers.Serializer):
+    city = serializers.CharField()
+    objective = serializers.IntegerField()
+    total_profiles = serializers.IntegerField()
+    claimed_profiles = serializers.IntegerField()
+    unclaimed_profiles = serializers.IntegerField()
+    active_profiles = serializers.IntegerField()
+    contacts_sent = serializers.IntegerField()
+    claim_rate = serializers.FloatField()
+    interest_count = serializers.IntegerField()
+    coverage_stage = serializers.CharField()
+    recommended_action = serializers.CharField()

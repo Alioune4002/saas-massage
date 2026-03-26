@@ -94,6 +94,9 @@ Variables principales :
 - Email : `DJANGO_EMAIL_*`, `DJANGO_DEFAULT_FROM_EMAIL`
 - Frontend callback : `FRONTEND_APP_URL`
 - Stripe : `NUADYX_STRIPE_SECRET_KEY`, `NUADYX_STRIPE_PUBLISHABLE_KEY`, `NUADYX_STRIPE_WEBHOOK_SECRET`
+- Marketplace : `NUADYX_DEFAULT_DEPOSIT_PERCENTAGE`, `NUADYX_MIN_DEPOSIT_PERCENTAGE`, `NUADYX_MAX_DEPOSIT_PERCENTAGE`, `NUADYX_UNVERIFIED_PRACTITIONER_MAX_DEPOSIT_PERCENTAGE`
+- Booking sécurité : `NUADYX_BOOKING_EMAIL_VERIFICATION_MINUTES`, `NUADYX_BOOKING_EMAIL_MAX_RESENDS`, `NUADYX_BOOKING_EMAIL_MAX_ATTEMPTS`, `NUADYX_GUEST_BOOKING_HOLD_MINUTES`
+- Annulation / validation : `NUADYX_FULL_REFUND_NOTICE_HOURS`, `NUADYX_PARTIAL_REFUND_NOTICE_HOURS`, `NUADYX_PARTIAL_REFUND_RATE`, `NUADYX_AUTO_RELEASE_AFTER_HOURS`, `NUADYX_INCIDENT_REPORT_WINDOW_HOURS`
 - Feature flags : `NUADYX_FEATURE_COOKIE_CONSENT`, `NUADYX_FEATURE_PRACTITIONER_VERIFICATION`, `NUADYX_FEATURE_REVIEW_REPLIES`
 
 ## Modules backend
@@ -109,6 +112,7 @@ Variables principales :
 - profil public revendiqué
 - compatibilité avec les anciens endpoints annuaire
 - vérification praticien
+- référentiel FR de localisation pour villes, codes postaux, départements et régions
 
 ### `services`
 - prestations proposées
@@ -119,8 +123,14 @@ Variables principales :
 - disponibilités
 - réservations
 - statuts métier
+- réservation invitée avec vérification email obligatoire
+- note client au praticien
 - paiements, acomptes, paiement sur place
 - Stripe Connect
+- payout différé et retenu côté plateforme
+- validation de prestation et auto-validation
+- incidents, no-show, registre de risque interne
+- messagerie minimale liée à la réservation
 - webhook Stripe
 
 ### `assistant`
@@ -204,6 +214,59 @@ cd frontend && npm run lint
 cd frontend && npm run build
 ```
 
+## Référentiel FR de localisation
+
+NUADYX embarque un référentiel France exploitable pour l’annuaire et l’auto-suggest live :
+- villes
+- codes postaux
+- départements
+- régions
+- pays
+
+Le dataset source local est :
+- [`backend/professionals/data/fr_locations.csv`](./backend/professionals/data/fr_locations.csv)
+
+Le modèle utilisé est :
+- [`backend/professionals/models.py`](./backend/professionals/models.py) via `LocationIndex`
+
+La commande de chargement est :
+```bash
+./.venv/bin/python backend/manage.py load_fr_location_index --replace
+```
+
+Cette commande :
+- recharge complètement `LocationIndex`
+- crée des slugs ville stables
+- gère les homonymes de communes avec suffixe départemental si nécessaire
+- alimente l’auto-suggest utilisé par l’annuaire et la landing
+
+Filtres annuaire supportés côté API :
+- `city`
+- `location_type`
+- `location_slug`
+
+Exemples :
+- `/annuaire/quimper`
+- `/annuaire?location_type=department&location_slug=finistere-29`
+- `/annuaire?location_type=region&location_slug=bretagne`
+- `/annuaire?location_type=postal_code&location_slug=29000`
+
+## Règles métier v1
+
+Réglage NUADYX v1 actuellement codé :
+- client invité autorisé
+- email vérifié obligatoire avant création réelle de la réservation
+- acompte par défaut recommandé : `30 %`
+- praticien non vérifié : acompte en ligne limité à `20 %`
+- praticien vérifié : acompte jusqu’à `50 %`
+- paiement total à la réservation : réservé aux praticiens vérifiés
+- paiement online encaissé par la plateforme puis payout différé
+- validation client après la séance, sinon auto-validation à `24 h`
+- annulation client : remboursement total à `>48 h`, remboursement partiel entre `48 h` et `24 h`, acompte conservé à `<24 h`
+- annulation praticien : remboursement intégral
+- litige : payout bloqué
+- messagerie privée : 1 fil par réservation
+
 ## Documentation interne
 
 - [`docs/deployer-vercel-backend-separe.md`](./docs/deployer-vercel-backend-separe.md)
@@ -211,6 +274,9 @@ cd frontend && npm run build
 - [`docs/ops-runbook.md`](./docs/ops-runbook.md)
 - [`docs/directory-ops-readme.md`](./docs/directory-ops-readme.md)
 - [`docs/payment-booking-audit-2026-03-25.md`](./docs/payment-booking-audit-2026-03-25.md)
+- [`docs/stripe-billing-audit-2026-03-26.md`](./docs/stripe-billing-audit-2026-03-26.md)
+- [`docs/booking-marketplace-statuses-2026-03-26.md`](./docs/booking-marketplace-statuses-2026-03-26.md)
+- [`docs/marketplace-production-checklist-2026-03-26.md`](./docs/marketplace-production-checklist-2026-03-26.md)
 - [`docs/compliance-foundation.md`](./docs/compliance-foundation.md)
 
 ## État actuel du projet

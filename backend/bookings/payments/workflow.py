@@ -12,7 +12,15 @@ from rest_framework.exceptions import ValidationError
 
 from professionals.models import ProfessionalPaymentAccount, ProfessionalProfile
 
-from ..models import Booking, BookingEventLog, BookingPayment, TrustedClient
+from ..models import (
+    Booking,
+    BookingEventLog,
+    BookingPayment,
+    BookingThread,
+    IncidentReport,
+    RiskRegisterEntry,
+    TrustedClient,
+)
 from .stripe_connect import (
     StripeConnectError,
     create_checkout_session,
@@ -42,10 +50,101 @@ def _platform_fee_rate() -> Decimal:
     return Decimal(str(getattr(settings, "NUADYX_PLATFORM_FEE_RATE", "0.10")))
 
 
+def _platform_default_deposit_percentage() -> Decimal:
+    return Decimal(str(getattr(settings, "NUADYX_DEFAULT_DEPOSIT_PERCENTAGE", "30.00")))
+
+
+def _platform_min_deposit_percentage() -> Decimal:
+    return Decimal(str(getattr(settings, "NUADYX_MIN_DEPOSIT_PERCENTAGE", "20.00")))
+
+
+def _platform_max_deposit_percentage() -> Decimal:
+    return Decimal(str(getattr(settings, "NUADYX_MAX_DEPOSIT_PERCENTAGE", "50.00")))
+
+
+def _unverified_practitioner_max_deposit_percentage() -> Decimal:
+    return Decimal(
+        str(
+            getattr(
+                settings,
+                "NUADYX_UNVERIFIED_PRACTITIONER_MAX_DEPOSIT_PERCENTAGE",
+                "20.00",
+            )
+        )
+    )
+
+
+def _full_refund_notice_hours() -> int:
+    return int(getattr(settings, "NUADYX_FULL_REFUND_NOTICE_HOURS", 48))
+
+
+def _partial_refund_notice_hours() -> int:
+    return int(getattr(settings, "NUADYX_PARTIAL_REFUND_NOTICE_HOURS", 24))
+
+
+def _partial_refund_rate() -> Decimal:
+    return Decimal(str(getattr(settings, "NUADYX_PARTIAL_REFUND_RATE", "0.50")))
+
+
+def _is_practitioner_verified_for_payments(professional: ProfessionalProfile) -> bool:
+    verification = getattr(professional, "verification", None)
+    return bool(verification and verification.badge_is_active)
+
+
+def _is_full_payment_allowed(professional: ProfessionalProfile) -> bool:
+    if not getattr(settings, "NUADYX_REQUIRE_VERIFIED_PRACTITIONER_FOR_FULL_PAYMENT", True):
+        return True
+    return _is_practitioner_verified_for_payments(professional)
+
+
+def _effective_deposit_cap_percentage(professional: ProfessionalProfile) -> Decimal:
+    if _is_practitioner_verified_for_payments(professional):
+        return _platform_max_deposit_percentage()
+    return min(
+        _platform_max_deposit_percentage(),
+        _unverified_practitioner_max_deposit_percentage(),
+    )
+
+
 def compute_platform_fee_eur(amount_eur: Decimal) -> Decimal:
     if amount_eur <= ZERO_EUR:
         return ZERO_EUR
     return quantize_eur(amount_eur * _platform_fee_rate())
+
+
+def get_practitioner_payment_readiness(professional: ProfessionalProfile) -> tuple[bool, str]:
+    config = get_stripe_connect_config()
+    payment_account = getattr(professional, "payment_account", None)
+    if not payment_account or payment_account.onboarding_status != ProfessionalPaymentAccount.OnboardingStatus.ACTIVE:
+        return False, "Le praticien n'est pas encore prêt pour l'encaissement en ligne."
+    if not payment_account.details_submitted or not payment_account.charges_enabled or not payment_account.payouts_enabled:
+        return False, "Le compte de paiement du praticien n'est pas encore totalement activé."
+
+    risk_entry = (
+        RiskRegisterEntry.objects.filter(
+            subject_type=RiskRegisterEntry.SubjectType.PRACTITIONER,
+            professional=professional,
+            is_active=True,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if risk_entry and (
+        risk_entry.risk_level in {RiskRegisterEntry.RiskLevel.HIGH, RiskRegisterEntry.RiskLevel.BLOCKED}
+        or risk_entry.practitioner_trust_status
+        in {
+            RiskRegisterEntry.PractitionerTrustStatus.RESTRICTED,
+            RiskRegisterEntry.PractitionerTrustStatus.SUSPENDED,
+        }
+    ):
+        return False, "Le paiement en ligne est temporairement suspendu pour ce praticien."
+
+    if not config.enabled and config.internal_test_mode:
+        return True, ""
+    if not config.enabled:
+        return False, "Le paiement en ligne n'est pas disponible pour le moment."
+
+    return True, ""
 
 
 def _latest_checkout_payment(booking: Booking):
@@ -86,6 +185,9 @@ def get_trusted_client_for_booking(*, professional: ProfessionalProfile, client_
 def calculate_booking_payment_terms(*, professional: ProfessionalProfile, total_price: Decimal, trusted_client: TrustedClient | None = None):
     total = quantize_eur(total_price)
     payment_mode = professional.reservation_payment_mode
+    payment_ready, payment_readiness_reason = get_practitioner_payment_readiness(professional)
+    full_payment_allowed = _is_full_payment_allowed(professional)
+    effective_deposit_cap = _effective_deposit_cap_percentage(professional)
     trust_exemption_applied = bool(
         trusted_client
         and trusted_client.is_active
@@ -95,10 +197,24 @@ def calculate_booking_payment_terms(*, professional: ProfessionalProfile, total_
             ProfessionalProfile.ReservationPaymentMode.FULL,
         }
     )
+    if payment_mode == ProfessionalProfile.ReservationPaymentMode.FULL and not full_payment_allowed:
+        payment_ready = False
+        payment_readiness_reason = (
+            "Le paiement total à la réservation est réservé aux praticiens vérifiés."
+        )
 
-    if payment_mode == ProfessionalProfile.ReservationPaymentMode.NONE or trust_exemption_applied:
+    if (
+        payment_mode == ProfessionalProfile.ReservationPaymentMode.NONE
+        or trust_exemption_applied
+        or not payment_ready
+    ):
+        effective_payment_mode = (
+            ProfessionalProfile.ReservationPaymentMode.NONE
+            if (trust_exemption_applied or not payment_ready)
+            else payment_mode
+        )
         return {
-            "payment_mode": payment_mode,
+            "payment_mode": effective_payment_mode,
             "payment_status": Booking.PaymentStatus.NONE_REQUIRED,
             "payment_collection_method": Booking.PaymentCollectionMethod.ON_SITE,
             "payment_channel": Booking.PaymentChannel.NONE,
@@ -112,7 +228,7 @@ def calculate_booking_payment_terms(*, professional: ProfessionalProfile, total_
             "payout_amount_eur": ZERO_EUR,
             "cancellation_notice_hours": professional.free_cancellation_notice_hours,
             "keep_payment_after_deadline": professional.keep_payment_after_deadline,
-            "payment_message": professional.payment_message,
+            "payment_message": payment_readiness_reason or professional.payment_message,
             "trust_exemption_applied": trust_exemption_applied,
             "payment_due_expires_at": None,
         }
@@ -122,9 +238,17 @@ def calculate_booking_payment_terms(*, professional: ProfessionalProfile, total_
         status = Booking.PaymentStatus.PAYMENT_REQUIRED
     else:
         if professional.deposit_value_type == ProfessionalProfile.DepositValueType.PERCENTAGE:
-            due_now = quantize_eur(total * professional.deposit_value / Decimal("100"))
+            bounded_percentage = min(
+                effective_deposit_cap,
+                max(
+                    _platform_min_deposit_percentage(),
+                    professional.deposit_value or _platform_default_deposit_percentage(),
+                ),
+            )
+            due_now = quantize_eur(total * bounded_percentage / Decimal("100"))
         else:
-            due_now = quantize_eur(professional.deposit_value)
+            max_deposit_amount = quantize_eur(total * effective_deposit_cap / Decimal("100"))
+            due_now = min(max_deposit_amount, quantize_eur(professional.deposit_value))
         due_now = min(total, max(ZERO_EUR, due_now))
         status = Booking.PaymentStatus.DEPOSIT_REQUIRED
 
@@ -501,15 +625,20 @@ def apply_cancellation_payment_outcome(*, booking: Booking, initiated_by: str, r
         booking.payout_blocked_reason = "Réservation annulée avant encaissement."
         return booking
 
-    cancellation_limit = booking.slot.start_at - timedelta(hours=booking.cancellation_notice_hours)
-    should_refund = (
-        initiated_by in {Booking.ActorRole.PRACTITIONER, Booking.ActorRole.PLATFORM}
-        or timezone.now() <= cancellation_limit
-        or not booking.keep_payment_after_deadline
-    )
+    now = timezone.now()
+    full_refund_limit = booking.slot.start_at - timedelta(hours=_full_refund_notice_hours())
+    partial_refund_limit = booking.slot.start_at - timedelta(hours=_partial_refund_notice_hours())
 
-    if should_refund:
+    if initiated_by in {Booking.ActorRole.PRACTITIONER, Booking.ActorRole.PLATFORM}:
         refund_amount = booking.amount_received_eur
+    elif now <= full_refund_limit or not booking.keep_payment_after_deadline:
+        refund_amount = booking.amount_received_eur
+    elif now <= partial_refund_limit:
+        refund_amount = quantize_eur(booking.amount_received_eur * _partial_refund_rate())
+    else:
+        refund_amount = ZERO_EUR
+
+    if refund_amount > ZERO_EUR:
         latest_platform_payment = booking.payments.filter(
             provider=BookingPayment.Provider.STRIPE_CONNECT,
             status__in=(BookingPayment.Status.AUTHORIZED, BookingPayment.Status.CAPTURED),
@@ -560,9 +689,13 @@ def apply_cancellation_payment_outcome(*, booking: Booking, initiated_by: str, r
             booking.provider_refund_id = refund.get("id", booking.provider_refund_id)
 
         booking.amount_refunded_eur = quantize_eur(booking.amount_refunded_eur + refund_amount)
-        booking.amount_received_eur = ZERO_EUR
+        booking.amount_received_eur = quantize_eur(max(ZERO_EUR, booking.amount_received_eur - refund_amount))
         booking.amount_remaining_eur = ZERO_EUR
-        booking.payment_status = Booking.PaymentStatus.REFUNDED
+        booking.payment_status = (
+            Booking.PaymentStatus.REFUNDED
+            if booking.amount_received_eur <= ZERO_EUR
+            else Booking.PaymentStatus.PARTIALLY_REFUNDED
+        )
         booking.refund_decision_source = refund_decision_source
         booking.payout_status = Booking.PayoutStatus.PAYOUT_BLOCKED
         booking.payout_blocked_reason = "Remboursement décidé avant versement."
@@ -588,8 +721,16 @@ def apply_cancellation_payment_outcome(*, booking: Booking, initiated_by: str, r
             booking=booking,
             actor_role=initiated_by,
             actor_user=actor_user,
-            event_type="payment.refunded",
-            message="Le règlement a été remboursé.",
+            event_type=(
+                "payment.refunded"
+                if booking.payment_status == Booking.PaymentStatus.REFUNDED
+                else "payment.partially_refunded"
+            ),
+            message=(
+                "Le règlement a été remboursé."
+                if booking.payment_status == Booking.PaymentStatus.REFUNDED
+                else "Une partie du règlement a été remboursée."
+            ),
             metadata={"refund_amount_eur": str(refund_amount)},
         )
         logger.info(
@@ -728,6 +869,33 @@ def report_booking_issue(*, booking: Booking, reason: str, actor_role: str, acto
         message="Un signalement a été ouvert sur cette réservation.",
         metadata={"reason": reason},
     )
+    IncidentReport.objects.create(
+        booking=booking,
+        reporter_type=(
+            IncidentReport.ReporterType.CLIENT
+            if actor_role == Booking.ActorRole.CLIENT
+            else IncidentReport.ReporterType.PRACTITIONER
+        ),
+        reported_party_type=(
+            IncidentReport.ReportedPartyType.PRACTITIONER
+            if actor_role == Booking.ActorRole.CLIENT
+            else IncidentReport.ReportedPartyType.CLIENT
+        ),
+        category="post_service_issue",
+        description=reason,
+        severity=IncidentReport.Severity.HIGH,
+        payout_frozen=True,
+    )
+    if actor_role == Booking.ActorRole.CLIENT:
+        RiskRegisterEntry.objects.create(
+            subject_type=RiskRegisterEntry.SubjectType.PRACTITIONER,
+            professional=booking.professional,
+            booking=booking,
+            risk_level=RiskRegisterEntry.RiskLevel.MEDIUM,
+            practitioner_trust_status=RiskRegisterEntry.PractitionerTrustStatus.WATCH,
+            reason="Signalement client sur une prestation.",
+            details=reason,
+        )
     logger.warning(
         "booking.fulfillment.disputed",
         extra={"booking_id": str(booking.id), "actor_role": actor_role},
@@ -794,6 +962,44 @@ def mark_booking_no_show(*, booking: Booking, absent_role: str, actor_user=None,
         message=booking.issue_reason,
         metadata={"absent_role": absent_role},
     )
+    IncidentReport.objects.create(
+        booking=booking,
+        reporter_type=IncidentReport.ReporterType.PRACTITIONER,
+        reported_party_type=(
+            IncidentReport.ReportedPartyType.CLIENT
+            if absent_role == Booking.ActorRole.CLIENT
+            else IncidentReport.ReportedPartyType.PRACTITIONER
+        ),
+        category=(
+            "client_no_show"
+            if absent_role == Booking.ActorRole.CLIENT
+            else "practitioner_no_show"
+        ),
+        description=booking.issue_reason,
+        severity=IncidentReport.Severity.HIGH,
+        payout_frozen=True,
+    )
+    if absent_role == Booking.ActorRole.CLIENT:
+        RiskRegisterEntry.objects.create(
+            subject_type=RiskRegisterEntry.SubjectType.CLIENT_EMAIL,
+            booking=booking,
+            client_email=booking.client_email,
+            client_phone=booking.client_phone,
+            risk_level=RiskRegisterEntry.RiskLevel.MEDIUM,
+            booking_restriction_status=RiskRegisterEntry.BookingRestrictionStatus.REVIEW_REQUIRED,
+            reason="Absence client signalée.",
+            details=booking.issue_reason,
+        )
+    else:
+        RiskRegisterEntry.objects.create(
+            subject_type=RiskRegisterEntry.SubjectType.PRACTITIONER,
+            professional=booking.professional,
+            booking=booking,
+            risk_level=RiskRegisterEntry.RiskLevel.HIGH,
+            practitioner_trust_status=RiskRegisterEntry.PractitionerTrustStatus.RESTRICTED,
+            reason="Absence praticien signalée.",
+            details=booking.issue_reason,
+        )
     logger.warning(
         "booking.no_show.recorded",
         extra={"booking_id": str(booking.id), "absent_role": absent_role},

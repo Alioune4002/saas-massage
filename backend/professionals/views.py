@@ -1,8 +1,10 @@
 from django.conf import settings
 from django.db.models import Q
-from rest_framework import generics, permissions, parsers
+from django.utils import timezone
+from rest_framework import generics, permissions, parsers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.utils.text import slugify
 
 from common.permissions import HasProfessionalProfile, IsProfessionalUser
 from directory.models import ImportedProfile, RemovalRequest
@@ -10,16 +12,32 @@ from directory.serializers import PublicImportedProfileSerializer
 from directory.services import create_claim_for_profile, send_claim_invite, send_removal_confirmation
 from services.models import MassageService, SERVICE_CATEGORY_KEYWORDS
 
+from .crm import (
+    filter_directory_querysets_by_location,
+    get_location_suggestions,
+    sync_practitioner_contacts,
+)
 from .models import (
+    ContactPrivateNote,
+    ContactTag,
     DirectoryInterestLead,
+    FavoritePractitioner,
+    GuestFavoriteCollection,
     PractitionerVerification,
+    PractitionerContact,
     ProfessionalProfile,
 )
 from .serializers import (
+    ContactTagSerializer,
     DirectoryInterestLeadSerializer,
     DirectoryProfileClaimRequestSerializer,
     DirectoryProfileRemovalRequestSerializer,
+    FavoritePractitionerSerializer,
+    GuestFavoriteCollectionSerializer,
+    LocationSuggestionSerializer,
     PractitionerVerificationSerializer,
+    PractitionerContactSerializer,
+    PractitionerContactUpdateSerializer,
     PublicDirectoryListingSerializer,
     ProfessionalDashboardSerializer,
     PublicProfessionalSerializer,
@@ -87,6 +105,99 @@ class PublicProfessionalDetailView(generics.RetrieveAPIView):
         )
 
 
+def _get_favorites_token(request):
+    return (
+        request.headers.get("X-Guest-Favorites-Token")
+        or request.query_params.get("token")
+        or request.data.get("token")
+        or ""
+    ).strip()
+
+
+def _resolve_favorite_collection(request, *, create: bool = False):
+    token = _get_favorites_token(request)
+    if token:
+        collection = GuestFavoriteCollection.objects.filter(
+            access_token=token,
+            is_active=True,
+        ).first()
+        if collection:
+            collection.last_accessed_at = timezone.now()
+            collection.save(update_fields=["last_accessed_at", "updated_at"])
+            return collection
+    if create:
+        return GuestFavoriteCollection.objects.create(last_accessed_at=timezone.now())
+    return None
+
+
+class PublicFavoritesView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        collection = _resolve_favorite_collection(request, create=False)
+        if not collection:
+            return Response(
+                {
+                    "collection_token": "",
+                    "favorites": [],
+                }
+            )
+        serializer = GuestFavoriteCollectionSerializer(collection, context={"request": request})
+        return Response(
+            {
+                "collection_token": collection.access_token,
+                "favorites": serializer.data["favorites"],
+            }
+        )
+
+    def post(self, request):
+        slug = str(request.data.get("professional_slug", "")).strip()
+        if not slug:
+            return Response({"detail": "Le praticien à ajouter est manquant."}, status=400)
+        professional = generics.get_object_or_404(
+            ProfessionalProfile.objects.filter(is_public=True),
+            slug=slug,
+        )
+        collection = _resolve_favorite_collection(request, create=True)
+        favorite, created = FavoritePractitioner.objects.get_or_create(
+            collection=collection,
+            professional=professional,
+        )
+        serializer = FavoritePractitionerSerializer(favorite, context={"request": request})
+        return Response(
+            {
+                "collection_token": collection.access_token,
+                "added": created,
+                "favorite": serializer.data,
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class PublicFavoriteDetailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def delete(self, request, slug: str):
+        collection = _resolve_favorite_collection(request, create=False)
+        if not collection:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        FavoritePractitioner.objects.filter(
+            collection=collection,
+            professional__slug=slug,
+        ).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PublicLocationSuggestionView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        suggestions = get_location_suggestions(query)
+        serializer = LocationSuggestionSerializer(suggestions, many=True)
+        return Response(serializer.data)
+
+
 class ProfessionalDashboardProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = ProfessionalDashboardSerializer
     permission_classes = [permissions.IsAuthenticated, IsProfessionalUser, HasProfessionalProfile]
@@ -109,6 +220,113 @@ class ProfessionalVerificationView(generics.RetrieveUpdateAPIView):
         return verification
 
 
+class ProfessionalContactListView(generics.ListAPIView):
+    serializer_class = PractitionerContactSerializer
+    permission_classes = [permissions.IsAuthenticated, IsProfessionalUser, HasProfessionalProfile]
+
+    def get_queryset(self):
+        professional = self.request.user.professional_profile
+        sync_practitioner_contacts(professional)
+        queryset = (
+            PractitionerContact.objects.filter(professional=professional)
+            .prefetch_related("tags")
+            .select_related("private_note")
+            .order_by("-last_booking_at", "first_name", "last_name")
+        )
+        segment = self.request.query_params.get("segment")
+        query = self.request.query_params.get("q")
+        tag = self.request.query_params.get("tag")
+        trusted = self.request.query_params.get("trusted")
+
+        if segment:
+            queryset = queryset.filter(segment=segment)
+        if query:
+            queryset = queryset.filter(
+                Q(first_name__icontains=query)
+                | Q(last_name__icontains=query)
+                | Q(email__icontains=query)
+                | Q(phone__icontains=query)
+            )
+        if tag:
+            queryset = queryset.filter(tags__normalized_label__icontains=tag.replace(" ", "").lower())
+        if trusted in {"true", "false"}:
+            queryset = queryset.filter(is_trusted=trusted == "true")
+        return queryset.distinct()
+
+
+class ProfessionalContactDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [permissions.IsAuthenticated, IsProfessionalUser, HasProfessionalProfile]
+
+    def get_queryset(self):
+        professional = self.request.user.professional_profile
+        sync_practitioner_contacts(professional)
+        return (
+            PractitionerContact.objects.filter(professional=professional)
+            .prefetch_related("tags")
+            .select_related("private_note")
+        )
+
+    def get_serializer_class(self):
+        if self.request.method in {"PATCH", "PUT"}:
+            return PractitionerContactUpdateSerializer
+        return PractitionerContactSerializer
+
+    def update(self, request, *args, **kwargs):
+        contact = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if "is_trusted" in serializer.validated_data:
+            contact.is_trusted = serializer.validated_data["is_trusted"]
+            contact.save(update_fields=["is_trusted", "updated_at"])
+
+        if "private_note" in serializer.validated_data:
+            content = serializer.validated_data["private_note"].strip()
+            if content:
+                ContactPrivateNote.objects.update_or_create(
+                    contact=contact,
+                    defaults={"content": content},
+                )
+            else:
+                ContactPrivateNote.objects.filter(contact=contact).delete()
+
+        if "tag_labels" in serializer.validated_data:
+            tag_instances = []
+            for label in serializer.validated_data["tag_labels"]:
+                tag, _created = ContactTag.objects.get_or_create(
+                    professional=contact.professional,
+                    normalized_label=slugify(label).replace("-", ""),
+                    defaults={"label": label},
+                )
+                if tag.label != label:
+                    tag.label = label
+                    tag.save(update_fields=["label", "updated_at"])
+                tag_instances.append(tag)
+            contact.tags.set(tag_instances)
+
+        response_serializer = PractitionerContactSerializer(contact, context={"request": request})
+        return Response(response_serializer.data)
+
+
+class ProfessionalContactTagListCreateView(generics.ListCreateAPIView):
+    serializer_class = ContactTagSerializer
+    permission_classes = [permissions.IsAuthenticated, IsProfessionalUser, HasProfessionalProfile]
+
+    def get_queryset(self):
+        return ContactTag.objects.filter(professional=self.request.user.professional_profile)
+
+    def perform_create(self, serializer):
+        serializer.save(professional=self.request.user.professional_profile)
+
+
+class ProfessionalContactTagDetailView(generics.DestroyAPIView):
+    serializer_class = ContactTagSerializer
+    permission_classes = [permissions.IsAuthenticated, IsProfessionalUser, HasProfessionalProfile]
+
+    def get_queryset(self):
+        return ContactTag.objects.filter(professional=self.request.user.professional_profile)
+
+
 class PublicDirectoryListingView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -116,6 +334,8 @@ class PublicDirectoryListingView(APIView):
         city = request.query_params.get("city", "").strip()
         query = request.query_params.get("q", "").strip()
         category = request.query_params.get("category", "").strip()
+        location_type = request.query_params.get("location_type", "").strip()
+        location_slug = request.query_params.get("location_slug", "").strip()
 
         professionals = (
             ProfessionalProfile.objects.filter(is_public=True)
@@ -127,6 +347,13 @@ class PublicDirectoryListingView(APIView):
             import_status=ImportedProfile.ImportStatus.PUBLISHED_UNCLAIMED,
             is_public=True,
         ).order_by("public_name")
+
+        professionals, candidates_queryset, _resolved_location = filter_directory_querysets_by_location(
+            professionals,
+            candidates_queryset,
+            location_type=location_type,
+            location_slug=location_slug,
+        )
 
         if city:
             professionals = professionals.filter(city__icontains=city)

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Bot, CalendarClock, CheckCircle2, Link2, Search, Star } from "lucide-react";
 
 import { DashboardPreview } from "@/components/marketing/dashboard-preview";
+import { LocationAutosuggest } from "@/components/directory/location-autosuggest";
 import { LaunchInterestForm } from "@/components/marketing/launch-interest-form";
 import { SiteHeader } from "@/components/marketing/site-header";
 import { Badge } from "@/components/ui/badge";
@@ -97,6 +98,13 @@ export default function HomePage() {
                   Découvrir un exemple
                 </Button>
               </Link>
+            </div>
+
+            <div className="mt-6 max-w-xl rounded-[1.6rem] border border-[var(--border)] bg-[var(--surface)] p-4">
+              <LocationAutosuggest
+                label="Trouver un praticien près de chez vous"
+                hint="Ville, code postal, département ou région"
+              />
             </div>
 
             <div className="mt-10 grid gap-3 sm:grid-cols-3">

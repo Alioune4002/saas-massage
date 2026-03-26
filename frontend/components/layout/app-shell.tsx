@@ -58,6 +58,12 @@ const navigation = [
     icon: BookOpenCheck,
   },
   {
+    href: "/contacts",
+    label: "Contacts / Clients",
+    description: "Segments, notes privées et suivi relation",
+    icon: Star,
+  },
+  {
     href: "/profil-public",
     label: "Mon profil public",
     description: "Page vitrine et réservation",
@@ -73,7 +79,7 @@ const navigation = [
     href: "/reviews",
     label: "Avis clients",
     description: "Invitations, avis et clients de confiance",
-    icon: Star,
+    icon: Sparkles,
   },
   {
     href: "/assistant",
@@ -88,6 +94,7 @@ const pageDescriptions: Record<string, string> = {
   "/services": "Présente tes prestations avec des durées lisibles et une page praticien claire.",
   "/availabilities": "Garde une lecture claire de la journée, des créneaux ouverts, des plages bloquées et des rendez-vous à venir.",
   "/bookings": "Retrouve les réservations clients et les décisions importantes au même endroit.",
+  "/contacts": "Classe les clients, retrouve les habitués et garde des notes privées utiles pour ton suivi.",
   "/profil-public": "Prépare la page publique réservable qui présente ton univers et tes prestations.",
   "/payments": "Pilote les règlements, les acomptes, les versements à venir et la connexion de ton compte de paiement.",
   "/reviews": "Invite d'anciens clients, recueille des avis vérifiés et identifie tes clients de confiance.",

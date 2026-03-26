@@ -110,6 +110,11 @@ export default function PublicProfileSettingsPage() {
     () => (profile ? buildPublicProfileUrl(profile.slug) : ""),
     [profile]
   );
+  const isVerifiedForPayments = Boolean(profile?.verification?.badge_is_active);
+  const allowedDepositOptions = useMemo(
+    () => (isVerifiedForPayments ? ["20.00", "30.00", "50.00"] : ["20.00"]),
+    [isVerifiedForPayments]
+  );
   const contextualCopy = useMemo(
     () => {
       if (!draft) {
@@ -889,9 +894,12 @@ export default function PublicProfileSettingsPage() {
                         ? {
                             ...current,
                             reservationPaymentMode: event.target.value as PublicProfileDraft["reservationPaymentMode"],
+                            depositValueType: "percentage",
                             depositValue:
                               event.target.value === "deposit"
-                                ? current.depositValue || "30.00"
+                                ? allowedDepositOptions.includes(current.depositValue)
+                                  ? current.depositValue
+                                  : allowedDepositOptions[0] || "20.00"
                                 : "0.00",
                           }
                         : current
@@ -900,51 +908,50 @@ export default function PublicProfileSettingsPage() {
                 >
                   <option value="none">Sans paiement à la réservation</option>
                   <option value="deposit">Demander un acompte pour réserver ce créneau</option>
-                  <option value="full">Demander le paiement total à la réservation</option>
+                  <option value="full" disabled={!isVerifiedForPayments}>
+                    Demander le paiement total à la réservation
+                  </option>
                 </Select>
               </FieldWrapper>
 
               {draft.reservationPaymentMode === "deposit" ? (
-                <div className="grid gap-4 md:grid-cols-[0.8fr_1.2fr]">
-                  <FieldWrapper label="Mode de calcul de l’acompte">
+                <div className="grid gap-4">
+                  <FieldWrapper
+                    label="Acompte demandé à la réservation"
+                    hint={
+                      isVerifiedForPayments
+                        ? "Options NUADYX v1 : 20 %, 30 % ou 50 %."
+                        : "Pendant le lancement, un praticien non vérifié est limité à 20 %."
+                    }
+                  >
                     <Select
-                      value={draft.depositValueType}
+                      value={draft.depositValue}
                       onChange={(event) =>
                         setDraft((current) =>
                           current
                             ? {
                                 ...current,
-                                depositValueType: event.target.value as PublicProfileDraft["depositValueType"],
+                                depositValueType: "percentage",
+                                depositValue: event.target.value,
                               }
                             : current
                         )
                       }
                     >
-                      <option value="fixed">Montant fixe</option>
-                      <option value="percentage">Pourcentage du soin</option>
+                      {allowedDepositOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option.replace(".00", "")} %
+                        </option>
+                      ))}
                     </Select>
                   </FieldWrapper>
-
-                  <FieldWrapper
-                    label="Montant demandé à la réservation"
-                    hint={draft.depositValueType === "percentage" ? "En %" : "En €"}
-                  >
-                    <Input
-                      type="number"
-                      min="0"
-                      max={draft.depositValueType === "percentage" ? "100" : undefined}
-                      step="0.01"
-                      value={draft.depositValue}
-                      onChange={(event) =>
-                        setDraft((current) =>
-                          current
-                            ? { ...current, depositValue: event.target.value }
-                            : current
-                        )
-                      }
-                    />
-                  </FieldWrapper>
                 </div>
+              ) : null}
+
+              {!isVerifiedForPayments ? (
+                <Notice tone="info">
+                  Pendant le lancement, le paiement total à la réservation est réservé aux praticiens vérifiés. L’acompte en ligne reste limité à 20 % tant que la vérification n’est pas finalisée.
+                </Notice>
               ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">

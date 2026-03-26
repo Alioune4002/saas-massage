@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { DirectoryBrowserPage } from "@/components/directory/directory-browser-page";
 
 function formatCityLabel(value: string) {
@@ -23,4 +25,18 @@ export default async function DirectoryCityPage({
       city={cityLabel}
     />
   );
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ ville: string }>;
+}): Promise<Metadata> {
+  const { ville } = await params;
+  const cityLabel = formatCityLabel(ville);
+
+  return {
+    title: `Massage et bien-être à ${cityLabel} | Annuaire NUADYX`,
+    description: `Trouvez un praticien du massage et du bien-être à ${cityLabel} sur NUADYX ou soyez le premier à créer votre page dans cette ville.`,
+  };
 }

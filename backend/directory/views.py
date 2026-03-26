@@ -16,8 +16,13 @@ from common.permissions import (
     CanReviewSources,
     IsAdminUser,
 )
-from professionals.models import ProfessionalProfile
-from professionals.serializers import PublicProfessionalSerializer
+from professionals.crm import build_city_coverage_metrics, filter_directory_querysets_by_location
+from professionals.models import DirectoryInterestLead, ProfessionalProfile
+from professionals.serializers import (
+    CityCoverageMetricSerializer,
+    DirectoryInterestLeadAdminSerializer,
+    PublicProfessionalSerializer,
+)
 
 from .models import (
     ContactCampaign,
@@ -298,9 +303,12 @@ class AdminImportedProfilesBulkActionView(APIView):
         return Response({"updated": updated, "details": details})
 
 
-class AdminContactCampaignCreateView(generics.CreateAPIView):
+class AdminContactCampaignCreateView(generics.ListCreateAPIView):
     serializer_class = ContactCampaignSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanOperateImports]
+
+    def get_queryset(self):
+        return ContactCampaign.objects.select_related("created_by", "approved_by").order_by("-created_at")
 
     def perform_create(self, serializer):
         instance = serializer.save(created_by=self.request.user)
@@ -332,6 +340,34 @@ class AdminContactCampaignSendView(APIView):
         return Response(result)
 
 
+class AdminAcquisitionCoverageView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanReviewProfiles]
+
+    def get(self, request):
+        objective = int(request.query_params.get("objective", 10) or 10)
+        metrics = build_city_coverage_metrics(objective_per_city=objective)
+        serializer = CityCoverageMetricSerializer(metrics, many=True)
+        return Response(serializer.data)
+
+
+class AdminAcquisitionSuggestionsView(generics.ListAPIView):
+    serializer_class = DirectoryInterestLeadAdminSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanReviewProfiles]
+
+    def get_queryset(self):
+        queryset = DirectoryInterestLead.objects.order_by("-created_at")
+        city = self.request.query_params.get("city")
+        kind = self.request.query_params.get("kind")
+        processed = self.request.query_params.get("processed")
+        if city:
+            queryset = queryset.filter(city__icontains=city)
+        if kind:
+            queryset = queryset.filter(kind=kind)
+        if processed in {"true", "false"}:
+            queryset = queryset.filter(processed=processed == "true")
+        return queryset
+
+
 class AdminRemovalRequestsView(generics.ListAPIView):
     serializer_class = RemovalRequestSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanReviewProfiles]
@@ -351,14 +387,22 @@ class PublicDirectoryListingsView(APIView):
         city = request.query_params.get("city", "").strip()
         category = request.query_params.get("category", "").strip().lower()
         query = request.query_params.get("q", "").strip().lower()
+        location_type = request.query_params.get("location_type", "").strip()
+        location_slug = request.query_params.get("location_slug", "").strip()
 
         claimed_queryset = ProfessionalProfile.objects.filter(is_public=True).order_by("business_name")
+        imported_queryset = ImportedProfile.objects.filter(is_public=True).order_by("public_name")
+        claimed_queryset, imported_queryset, _resolved_location = filter_directory_querysets_by_location(
+            claimed_queryset,
+            imported_queryset,
+            location_type=location_type,
+            location_slug=location_slug,
+        )
         if city:
             claimed_queryset = claimed_queryset.filter(city__icontains=city)
         if query:
             claimed_queryset = claimed_queryset.filter(business_name__icontains=query)
 
-        imported_queryset = ImportedProfile.objects.filter(is_public=True).order_by("public_name")
         if city:
             imported_queryset = imported_queryset.filter(city__icontains=city)
         if query:

@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import re
 from io import StringIO
 from datetime import timedelta
 from decimal import Decimal
@@ -14,10 +15,23 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 from accounts.models import User
-from professionals.models import ProfessionalPaymentAccount, ProfessionalProfile
+from professionals.models import (
+    PractitionerVerification,
+    ProfessionalPaymentAccount,
+    ProfessionalProfile,
+)
 from services.models import MassageService
 
-from .models import AvailabilitySlot, Booking, BookingPayment, PaymentWebhookEventLog
+from .models import (
+    AvailabilitySlot,
+    Booking,
+    BookingEmailVerification,
+    GuestBookingIdentity,
+    BookingPayment,
+    PaymentWebhookEventLog,
+    IncidentReport,
+    RiskRegisterEntry,
+)
 from .payments import (
     apply_cancellation_payment_outcome,
     audit_and_optionally_fix_booking_anomalies,
@@ -155,6 +169,20 @@ class BookingPaymentLogicTests(TestCase):
             duration_minutes=90,
             price_eur="120.00",
         )
+        ProfessionalPaymentAccount.objects.create(
+            professional=self.profile,
+            stripe_account_id="acct_logic_ready",
+            onboarding_status=ProfessionalPaymentAccount.OnboardingStatus.ACTIVE,
+            details_submitted=True,
+            charges_enabled=True,
+            payouts_enabled=True,
+        )
+        PractitionerVerification.objects.create(
+            professional=self.profile,
+            status=PractitionerVerification.Status.VERIFIED,
+            verified_at=timezone.now(),
+            expires_at=timezone.now() + timedelta(days=180),
+        )
 
     def test_no_payment_mode_keeps_full_amount_for_on_site_payment(self):
         terms = calculate_booking_payment_terms(
@@ -224,8 +252,8 @@ class BookingPaymentLogicTests(TestCase):
         slot = AvailabilitySlot.objects.create(
             professional=self.profile,
             service=self.service,
-            start_at=timezone.now() + timedelta(days=2),
-            end_at=timezone.now() + timedelta(days=2, minutes=90),
+            start_at=timezone.now() + timedelta(days=3),
+            end_at=timezone.now() + timedelta(days=3, minutes=90),
         )
         booking = Booking.objects.create(
             professional=self.profile,
@@ -386,8 +414,14 @@ class BookingCommunicationTests(APITestCase):
             end_at=timezone.now() + timedelta(days=1, hours=1),
         )
         self.token = Token.objects.create(user=self.user)
+        PractitionerVerification.objects.create(
+            professional=self.profile,
+            status=PractitionerVerification.Status.VERIFIED,
+            verified_at=timezone.now(),
+            expires_at=timezone.now() + timedelta(days=180),
+        )
 
-    def test_public_booking_sends_email_to_practitioner(self):
+    def _start_booking_verification(self):
         response = self.client.post(
             "/api/bookings/",
             {
@@ -397,14 +431,64 @@ class BookingCommunicationTests(APITestCase):
                 "client_first_name": "Alice",
                 "client_last_name": "Martin",
                 "client_email": "alice@example.com",
+                "accept_cgu": True,
+                "accept_cgv": True,
+                "accept_cancellation_policy": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 202)
+        identity = GuestBookingIdentity.objects.get(id=response.data["id"])
+        verification = identity.email_verifications.order_by("-created_at").first()
+        code = re.search(r"(\d{6})", mail.outbox[-1].body).group(1)
+        return identity, verification, code
+
+    def test_public_booking_requires_email_verification_first(self):
+        identity, verification, _code = self._start_booking_verification()
+        self.assertEqual(identity.verification_status, GuestBookingIdentity.VerificationStatus.PENDING)
+        self.assertEqual(verification.status, BookingEmailVerification.Status.PENDING)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Vérifiez votre email", mail.outbox[0].subject)
+
+    def test_verified_public_booking_sends_practitioner_notification(self):
+        identity, _verification, code = self._start_booking_verification()
+
+        response = self.client.post(
+            "/api/bookings/verify-email/",
+            {
+                "guest_identity_id": str(identity.id),
+                "code": code,
             },
             format="json",
         )
 
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(mail.outbox), 3)
+        self.assertIn("Nouvelle demande de rendez-vous", mail.outbox[1].subject)
+        self.assertEqual(mail.outbox[1].to, [self.user.email])
+        self.assertTrue(response.data["guest_access_token"])
+
+    def test_public_booking_can_resend_verification_code_with_matching_email(self):
+        identity, verification, _code = self._start_booking_verification()
+        identity.last_verification_sent_at = timezone.now() - timedelta(minutes=2)
+        identity.save(update_fields=["last_verification_sent_at", "updated_at"])
+
+        response = self.client.post(
+            "/api/bookings/resend-verification/",
+            {
+                "guest_identity_id": str(identity.id),
+                "client_email": "alice@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        identity.refresh_from_db()
+        verification.refresh_from_db()
+        self.assertEqual(identity.verification_resend_count, 1)
+        self.assertEqual(verification.status, BookingEmailVerification.Status.EXPIRED)
         self.assertEqual(len(mail.outbox), 2)
-        self.assertIn("Nouvelle demande de rendez-vous", mail.outbox[0].subject)
-        self.assertEqual(mail.outbox[0].to, [self.user.email])
+        self.assertIn("Un nouveau code", response.data["message"])
 
     def test_confirm_and_cancel_send_client_emails(self):
         booking = Booking.objects.create(
@@ -440,15 +524,21 @@ class BookingCommunicationTests(APITestCase):
         self.profile.deposit_value = Decimal("30.00")
         self.profile.save()
 
+        ProfessionalPaymentAccount.objects.create(
+            professional=self.profile,
+            stripe_account_id="acct_ready_123",
+            onboarding_status=ProfessionalPaymentAccount.OnboardingStatus.ACTIVE,
+            details_submitted=True,
+            charges_enabled=True,
+            payouts_enabled=True,
+        )
+
+        identity, _verification, code = self._start_booking_verification()
         successful_response = self.client.post(
-            "/api/bookings/",
+            "/api/bookings/verify-email/",
             {
-                "professional_slug": self.profile.slug,
-                "service_id": str(self.service.id),
-                "slot_id": str(self.slot.id),
-                "client_first_name": "Alice",
-                "client_last_name": "Martin",
-                "client_email": "alice@example.com",
+                "guest_identity_id": str(identity.id),
+                "code": code,
             },
             format="json",
         )
@@ -458,6 +548,58 @@ class BookingCommunicationTests(APITestCase):
         self.assertEqual(successful_response.data["amount_received_eur"], "0.00")
         self.assertEqual(successful_response.data["amount_remaining_eur"], "60.00")
         self.assertTrue(successful_response.data["checkout_url"])
+
+    def test_public_booking_falls_back_to_pay_on_site_when_practitioner_is_not_payment_ready(self):
+        self.profile.reservation_payment_mode = ProfessionalProfile.ReservationPaymentMode.DEPOSIT
+        self.profile.deposit_value_type = ProfessionalProfile.DepositValueType.FIXED
+        self.profile.deposit_value = Decimal("30.00")
+        self.profile.save()
+
+        identity, _verification, code = self._start_booking_verification()
+        successful_response = self.client.post(
+            "/api/bookings/verify-email/",
+            {
+                "guest_identity_id": str(identity.id),
+                "code": code,
+            },
+            format="json",
+        )
+
+        self.assertEqual(successful_response.status_code, 201)
+        self.assertEqual(successful_response.data["payment_mode"], ProfessionalProfile.ReservationPaymentMode.NONE)
+        self.assertEqual(successful_response.data["payment_status"], Booking.PaymentStatus.NONE_REQUIRED)
+        self.assertFalse(successful_response.data["checkout_url"])
+
+    def test_guest_can_open_thread_and_send_message_with_secure_token(self):
+        identity, _verification, code = self._start_booking_verification()
+        verify_response = self.client.post(
+            "/api/bookings/verify-email/",
+            {
+                "guest_identity_id": str(identity.id),
+                "code": code,
+            },
+            format="json",
+        )
+        booking_id = verify_response.data["id"]
+        guest_token = verify_response.data["guest_access_token"]
+
+        get_response = self.client.get(
+            f"/api/bookings/{booking_id}/thread/?token={guest_token}",
+            format="json",
+        )
+        post_response = self.client.post(
+            f"/api/bookings/{booking_id}/thread/",
+            {
+                "token": guest_token,
+                "message": "Je serai là avec cinq minutes d'avance.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(get_response.status_code, 200)
+        self.assertEqual(post_response.status_code, 201)
+        self.assertEqual(post_response.data["sender_role"], "client")
+        self.assertFalse(post_response.data["is_flagged"])
 
 
 @override_settings(
@@ -482,6 +624,12 @@ class StripeWebhookHardeningTests(APITestCase):
             reservation_payment_mode=ProfessionalProfile.ReservationPaymentMode.DEPOSIT,
             deposit_value_type=ProfessionalProfile.DepositValueType.FIXED,
             deposit_value=Decimal("30.00"),
+        )
+        PractitionerVerification.objects.create(
+            professional=self.profile,
+            status=PractitionerVerification.Status.VERIFIED,
+            verified_at=timezone.now(),
+            expires_at=timezone.now() + timedelta(days=180),
         )
         self.service = MassageService.objects.create(
             professional=self.profile,
@@ -611,6 +759,13 @@ class PublicServiceValidationTests(APITestCase):
         self.booking.refresh_from_db()
         self.assertEqual(self.booking.fulfillment_status, Booking.FulfillmentStatus.DISPUTED)
         self.assertEqual(self.booking.payout_status, Booking.PayoutStatus.PAYOUT_BLOCKED)
+        self.assertTrue(IncidentReport.objects.filter(booking=self.booking).exists())
+        self.assertTrue(
+            RiskRegisterEntry.objects.filter(
+                booking=self.booking,
+                subject_type=RiskRegisterEntry.SubjectType.PRACTITIONER,
+            ).exists()
+        )
 
 
 class BookingMaintenanceCommandTests(TestCase):

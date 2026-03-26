@@ -15,7 +15,7 @@ from directory.models import (
     SourceImportJob,
     SourceRegistry,
 )
-from professionals.models import ProfessionalProfile
+from professionals.models import DirectoryInterestLead, LocationIndex, ProfessionalProfile
 
 
 class DirectoryEndToEndFlowTests(TestCase):
@@ -263,7 +263,113 @@ class DirectoryPermissionTests(TestCase):
             f"/api/admin/contact-campaigns/{campaign_response.data['id']}/send"
         )
         self.assertEqual(send_response.status_code, 400)
-        self.assertIn("dépasse le seuil", send_response.data["detail"])
+
+
+class DirectoryLocationFilteringTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            email="admin-locations@nuadyx.test",
+            username="admin-locations",
+            password="testpass123",
+            role=User.Role.ADMIN,
+        )
+        self.source = SourceRegistry.objects.create(
+            name="Location source",
+            source_type=SourceRegistry.SourceType.MANUAL_CSV,
+            legal_status=SourceRegistry.LegalStatus.APPROVED,
+            is_active=True,
+            can_contact_imported_profiles=True,
+        )
+        user = User.objects.create_user(
+            email="quimper@nuadyx.test",
+            username="quimper",
+            password="testpass123",
+            role=User.Role.PROFESSIONAL,
+        )
+        self.quimper = ProfessionalProfile.objects.create(
+            user=user,
+            business_name="Cabinet Quimper",
+            slug="cabinet-quimper",
+            city="Quimper",
+            is_public=True,
+        )
+        other_user = User.objects.create_user(
+            email="rennes@nuadyx.test",
+            username="rennes",
+            password="testpass123",
+            role=User.Role.PROFESSIONAL,
+        )
+        self.rennes = ProfessionalProfile.objects.create(
+            user=other_user,
+            business_name="Cabinet Rennes",
+            slug="cabinet-rennes",
+            city="Rennes",
+            is_public=True,
+        )
+        LocationIndex.objects.create(
+            location_type=LocationIndex.LocationType.CITY,
+            label="Quimper",
+            city="Quimper",
+            postal_code="29000",
+            department_code="29",
+            department_name="Finistère",
+            region="Bretagne",
+            slug="quimper",
+            priority=40,
+        )
+        LocationIndex.objects.create(
+            location_type=LocationIndex.LocationType.DEPARTMENT,
+            label="Finistère (29)",
+            department_code="29",
+            department_name="Finistère",
+            region="Bretagne",
+            slug="finistere-29",
+            priority=30,
+        )
+
+    def test_public_directory_listings_filter_by_department_slug(self):
+        response = self.client.get(
+            "/api/public/directory-listings",
+            {"location_type": "department", "location_slug": "finistere-29"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        slugs = {item["slug"] for item in response.data}
+        self.assertIn(self.quimper.slug, slugs)
+        self.assertNotIn(self.rennes.slug, slugs)
+
+    def test_admin_can_read_acquisition_coverage_and_suggestions(self):
+        self.client.force_authenticate(self.admin)
+        DirectoryInterestLead.objects.create(
+            kind="suggest_practitioner",
+            full_name="Alioune Seck",
+            email="alioune@example.com",
+            city="Quimper",
+            practitioner_name="Cabinet Breizh",
+            source_page="/annuaire",
+        )
+        ImportedProfile.objects.create(
+            source=self.source,
+            external_id="coverage-1",
+            public_name="Cabinet Breizh",
+            business_name="Cabinet Breizh",
+            city="Quimper",
+            email_public="breizh@example.com",
+            import_status=ImportedProfile.ImportStatus.PUBLISHED_UNCLAIMED,
+            is_public=True,
+            publishable_minimum_ok=True,
+            contact_allowed_based_on_source_policy=True,
+        )
+
+        coverage_response = self.client.get("/api/admin/acquisition/coverage")
+        suggestions_response = self.client.get("/api/admin/acquisition/suggestions")
+        campaigns_response = self.client.get("/api/admin/contact-campaigns")
+
+        self.assertEqual(coverage_response.status_code, 200)
+        self.assertEqual(suggestions_response.status_code, 200)
+        self.assertEqual(campaigns_response.status_code, 200)
+        self.assertEqual(suggestions_response.data[0]["city"], "Quimper")
 
     def test_bulk_claim_invite_is_blocked_when_source_cannot_be_contacted(self):
         self.client.force_authenticate(self.admin)

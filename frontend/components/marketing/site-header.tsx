@@ -18,6 +18,9 @@ export function SiteHeader() {
           <Link href="/annuaire" className="hover:text-[var(--foreground)]">
             Trouver un praticien
           </Link>
+          <Link href="/favoris" className="hover:text-[var(--foreground)]">
+            Mes favoris
+          </Link>
           <a href="#pourquoi-rejoindre" className="hover:text-[var(--foreground)]">
             Pourquoi rejoindre NUADYX
           </a>

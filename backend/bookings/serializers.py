@@ -1,14 +1,30 @@
+import hashlib
+import secrets
+from datetime import timedelta
+
+from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
 from rest_framework import serializers
 
 from professionals.models import ProfessionalProfile
 from services.models import MassageService
-from .models import AvailabilitySlot, Booking, BookingPayment, TrustedClient
+from .models import (
+    AvailabilitySlot,
+    Booking,
+    BookingEmailVerification,
+    BookingMessage,
+    BookingPayment,
+    BookingThread,
+    GuestBookingIdentity,
+    IncidentReport,
+    TrustedClient,
+)
 from .payments import (
     create_checkout_for_booking,
     calculate_booking_payment_terms,
     evaluate_post_service_release,
+    generate_client_action_token,
     get_trusted_client_for_booking,
     get_public_payment_summary,
     mark_booking_payment_pending,
@@ -30,7 +46,7 @@ class PublicAvailabilitySerializer(serializers.ModelSerializer):
         )
 
 
-class PublicBookingCreateSerializer(serializers.Serializer):
+class PublicBookingIntentSerializer(serializers.Serializer):
     professional_slug = serializers.SlugField()
     service_id = serializers.UUIDField()
     slot_id = serializers.UUIDField()
@@ -39,6 +55,9 @@ class PublicBookingCreateSerializer(serializers.Serializer):
     client_email = serializers.EmailField()
     client_phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
     client_note = serializers.CharField(required=False, allow_blank=True)
+    accept_cgu = serializers.BooleanField()
+    accept_cgv = serializers.BooleanField()
+    accept_cancellation_policy = serializers.BooleanField()
 
     def validate(self, attrs):
         professional_slug = attrs["professional_slug"]
@@ -95,6 +114,11 @@ class PublicBookingCreateSerializer(serializers.Serializer):
             trusted_client=trusted_client,
         )
 
+        if not attrs["accept_cgu"] or not attrs["accept_cgv"] or not attrs["accept_cancellation_policy"]:
+            raise serializers.ValidationError(
+                "Vous devez accepter les CGU, les CGV et la politique d’annulation pour continuer."
+            )
+
         attrs["professional"] = professional
         attrs["service"] = service
         attrs["slot"] = slot
@@ -102,34 +126,162 @@ class PublicBookingCreateSerializer(serializers.Serializer):
         attrs["trusted_client"] = trusted_client
         return attrs
 
-    @transaction.atomic
     def create(self, validated_data):
-        slot = AvailabilitySlot.objects.select_for_update().get(id=validated_data["slot"].id)
-
-        if slot.bookings.select_for_update().filter(
-            status__in=(Booking.Status.PENDING, Booking.Status.CONFIRMED)
-        ).exists():
-            raise serializers.ValidationError("Ce créneau vient d'être réservé.")
-
-        booking = Booking.objects.create(
+        return GuestBookingIdentity.objects.create(
             professional=validated_data["professional"],
             service=validated_data["service"],
-            slot=slot,
+            slot=validated_data["slot"],
             client_first_name=validated_data["client_first_name"],
             client_last_name=validated_data["client_last_name"],
             client_email=validated_data["client_email"],
             client_phone=validated_data.get("client_phone", ""),
             client_note=validated_data.get("client_note", ""),
+            consent_cgu=validated_data["accept_cgu"],
+            consent_cgv=validated_data["accept_cgv"],
+            consent_cancellation_policy=validated_data["accept_cancellation_policy"],
+            consented_at=timezone.now(),
+            consent_version=self.context.get("consent_version", "2026-03-26"),
+            consent_snapshot_json={
+                "accept_cgu": validated_data["accept_cgu"],
+                "accept_cgv": validated_data["accept_cgv"],
+                "accept_cancellation_policy": validated_data["accept_cancellation_policy"],
+            },
+        )
+
+
+class PublicBookingEmailVerificationSerializer(serializers.Serializer):
+    guest_identity_id = serializers.UUIDField()
+    code = serializers.CharField(max_length=12)
+
+    def validate(self, attrs):
+        try:
+            guest_identity = GuestBookingIdentity.objects.select_related(
+                "professional",
+                "service",
+                "slot",
+            ).get(id=attrs["guest_identity_id"])
+        except GuestBookingIdentity.DoesNotExist as exc:
+            raise serializers.ValidationError("Demande de réservation introuvable.") from exc
+
+        verification_window_minutes = int(
+            getattr(settings, "NUADYX_GUEST_BOOKING_HOLD_MINUTES", 30)
+        )
+        if guest_identity.created_at <= timezone.now() - timedelta(minutes=verification_window_minutes):
+            guest_identity.verification_status = GuestBookingIdentity.VerificationStatus.EXPIRED
+            guest_identity.save(update_fields=["verification_status", "updated_at"])
+            raise serializers.ValidationError("Cette demande a expiré. Recommencez votre réservation.")
+
+        verification = guest_identity.email_verifications.order_by("-created_at").first()
+        if not verification:
+            raise serializers.ValidationError("Aucune vérification en attente pour cette réservation.")
+        if verification.status in {
+            BookingEmailVerification.Status.EXPIRED,
+            BookingEmailVerification.Status.BLOCKED,
+        }:
+            raise serializers.ValidationError("Le code n’est plus valide. Demandez-en un nouveau.")
+        if verification.expires_at <= timezone.now():
+            verification.status = BookingEmailVerification.Status.EXPIRED
+            verification.save(update_fields=["status", "updated_at"])
+            guest_identity.verification_status = GuestBookingIdentity.VerificationStatus.EXPIRED
+            guest_identity.save(update_fields=["verification_status", "updated_at"])
+            raise serializers.ValidationError("Le code a expiré. Demandez-en un nouveau.")
+
+        normalized_code = attrs["code"].strip()
+        expected_hash = hashlib.sha256(normalized_code.encode()).hexdigest()
+        if expected_hash != verification.code_hash:
+            verification.attempts_count += 1
+            if verification.attempts_count >= verification.max_attempts:
+                verification.status = BookingEmailVerification.Status.BLOCKED
+                guest_identity.verification_status = GuestBookingIdentity.VerificationStatus.BLOCKED
+                guest_identity.save(update_fields=["verification_status", "updated_at"])
+            verification.save(update_fields=["attempts_count", "status", "updated_at"])
+            raise serializers.ValidationError("Le code saisi est incorrect.")
+
+        attrs["guest_identity"] = guest_identity
+        attrs["verification"] = verification
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        guest_identity: GuestBookingIdentity = validated_data["guest_identity"]
+        verification: BookingEmailVerification = validated_data["verification"]
+
+        if guest_identity.booking_id:
+            return guest_identity.booking
+
+        slot = AvailabilitySlot.objects.select_for_update().get(id=guest_identity.slot_id)
+        if slot.bookings.select_for_update().filter(
+            status__in=(Booking.Status.PENDING, Booking.Status.CONFIRMED)
+        ).exists():
+            raise serializers.ValidationError("Ce créneau n’est plus disponible.")
+
+        trusted_client = get_trusted_client_for_booking(
+            professional=guest_identity.professional,
+            client_email=guest_identity.client_email,
+        )
+        booking = Booking.objects.create(
+            professional=guest_identity.professional,
+            service=guest_identity.service,
+            slot=slot,
+            client_first_name=guest_identity.client_first_name,
+            client_last_name=guest_identity.client_last_name,
+            client_email=guest_identity.client_email,
+            client_phone=guest_identity.client_phone,
+            client_note=guest_identity.client_note,
+            guest_identity=guest_identity,
             status=Booking.Status.PENDING,
             **calculate_booking_payment_terms(
-                professional=validated_data["professional"],
-                total_price=validated_data["service"].price_eur,
-                trusted_client=validated_data.get("trusted_client"),
+                professional=guest_identity.professional,
+                total_price=guest_identity.service.price_eur,
+                trusted_client=trusted_client,
             ),
         )
+        BookingThread.objects.create(booking=booking)
         payment_request = record_booking_payment_request(booking)
+        verification.status = BookingEmailVerification.Status.VERIFIED
+        verification.verified_at = timezone.now()
+        verification.save(update_fields=["status", "verified_at", "updated_at"])
+        guest_identity.booking = booking
+        guest_identity.verification_status = GuestBookingIdentity.VerificationStatus.COMPLETED
+        guest_identity.email_verified_at = timezone.now()
+        guest_identity.save(
+            update_fields=[
+                "booking",
+                "verification_status",
+                "email_verified_at",
+                "updated_at",
+            ]
+        )
         self.context["payment_request"] = payment_request
         return booking
+
+
+class PublicBookingVerificationStatusSerializer(serializers.ModelSerializer):
+    masked_email = serializers.SerializerMethodField()
+    expires_at = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GuestBookingIdentity
+        fields = (
+            "id",
+            "verification_status",
+            "masked_email",
+            "expires_at",
+            "verification_resend_count",
+        )
+
+    def get_masked_email(self, obj):
+        email = obj.client_email
+        local, _, domain = email.partition("@")
+        if len(local) <= 2:
+            local = f"{local[:1]}***"
+        else:
+            local = f"{local[:2]}***"
+        return f"{local}@{domain}"
+
+    def get_expires_at(self, obj):
+        verification = obj.email_verifications.order_by("-created_at").first()
+        return verification.expires_at if verification else None
 
 
 class PublicBookingCreatedSerializer(serializers.ModelSerializer):
@@ -260,6 +412,54 @@ class ProfessionalAvailabilitySerializer(serializers.ModelSerializer):
         return booking
 
 
+class BookingMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BookingMessage
+        fields = (
+            "id",
+            "sender_role",
+            "guest_email",
+            "body",
+            "contains_external_link",
+            "is_flagged",
+            "created_at",
+        )
+        read_only_fields = (
+            "id",
+            "sender_role",
+            "guest_email",
+            "contains_external_link",
+            "is_flagged",
+            "created_at",
+        )
+
+
+class IncidentReportSerializer(serializers.ModelSerializer):
+    evidences_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IncidentReport
+        fields = (
+            "id",
+            "reporter_type",
+            "reported_party_type",
+            "category",
+            "description",
+            "status",
+            "severity",
+            "payout_frozen",
+            "admin_notes",
+            "resolution",
+            "resolved_at",
+            "created_at",
+            "evidences_count",
+        )
+        read_only_fields = fields
+
+    def get_evidences_count(self, obj):
+        return obj.evidences.count()
+
+
 class ProfessionalBookingSerializer(serializers.ModelSerializer):
     service_title = serializers.CharField(source="service.title", read_only=True)
     start_at = serializers.DateTimeField(source="slot.start_at", read_only=True)
@@ -267,6 +467,8 @@ class ProfessionalBookingSerializer(serializers.ModelSerializer):
     payment_summary = serializers.SerializerMethodField()
     payout_summary = serializers.SerializerMethodField()
     timeline = serializers.SerializerMethodField()
+    incidents = IncidentReportSerializer(many=True, read_only=True)
+    thread_messages = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -322,6 +524,8 @@ class ProfessionalBookingSerializer(serializers.ModelSerializer):
             "payment_summary",
             "payout_summary",
             "timeline",
+            "incidents",
+            "thread_messages",
         )
         read_only_fields = (
             "service_title",
@@ -336,6 +540,8 @@ class ProfessionalBookingSerializer(serializers.ModelSerializer):
             "payment_summary",
             "payout_summary",
             "timeline",
+            "incidents",
+            "thread_messages",
         )
 
     def get_payment_summary(self, obj):
@@ -384,6 +590,13 @@ class ProfessionalBookingSerializer(serializers.ModelSerializer):
             }
             for event in events
         ]
+
+    def get_thread_messages(self, obj):
+        thread = getattr(obj, "thread", None)
+        if not thread:
+            return []
+        messages = thread.messages.order_by("created_at")[:20]
+        return BookingMessageSerializer(messages, many=True).data
 
 
 class AgendaBookingSummarySerializer(serializers.ModelSerializer):

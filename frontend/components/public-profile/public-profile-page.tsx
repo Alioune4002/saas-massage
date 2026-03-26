@@ -39,17 +39,21 @@ import {
   getPublicProfessional,
   getPublicServices,
   getServices,
+  resendPublicBookingVerification,
   type AssistantReply,
   type PublicBookingCreated,
+  type PublicBookingVerificationPending,
   type CreatePublicBookingPayload,
   type PublicAssistant,
   type PublicAvailability,
   type PublicProfessional,
   type PublicService,
+  verifyPublicBookingEmail,
 } from "@/lib/api";
 import { getStoredUser } from "@/lib/auth";
 import { PublicAssistantCard } from "@/components/public-profile/public-assistant-card";
 import { PublicBookingCard } from "@/components/public-profile/public-booking-card";
+import { FavoritePractitionerButton } from "@/components/directory/favorite-practitioner-button";
 import { buildPublicPaymentPreview } from "@/lib/payments";
 import {
   buildPublicProfileUrl,
@@ -152,6 +156,9 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [bookingError, setBookingError] = useState("");
   const [bookingReceipt, setBookingReceipt] = useState<PublicBookingCreated | null>(null);
+  const [bookingVerification, setBookingVerification] =
+    useState<PublicBookingVerificationPending | null>(null);
+  const [bookingVerificationCode, setBookingVerificationCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [bookingForm, setBookingForm] = useState<Omit<
     CreatePublicBookingPayload,
@@ -162,6 +169,9 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
     client_email: "",
     client_phone: "",
     client_note: "",
+    accept_cgu: false,
+    accept_cgv: false,
+    accept_cancellation_policy: false,
   });
   const paymentProcessing = searchParams.get("payment") === "processing";
   const paymentCancelled = searchParams.get("payment") === "cancelled";
@@ -356,6 +366,7 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
     event.preventDefault();
     setBookingError("");
     setBookingReceipt(null);
+    setBookingVerificationCode("");
 
     if (!selectedServiceId || !selectedSlotId) {
       setBookingError("Choisis une prestation et un créneau.");
@@ -370,29 +381,85 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
         slot_id: selectedSlotId,
         ...bookingForm,
       });
-
-      if (result.checkout_url) {
-        window.location.href = result.checkout_url;
-        return;
-      }
-
-      setBookingReceipt(result);
-      setSelectedSlotId("");
-      setBookingForm({
-        client_first_name: "",
-        client_last_name: "",
-        client_email: "",
-        client_phone: "",
-        client_note: "",
-      });
-
-      const refreshedSlots = await getPublicAvailabilities(slug);
-      setSlots(refreshedSlots);
+      setBookingVerification(result);
     } catch (err) {
       setBookingError(
         err instanceof Error
           ? err.message
-          : "Impossible de finaliser la demande."
+          : "Impossible de démarrer la réservation."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function finalizeVerifiedBooking(result: PublicBookingCreated) {
+    if (result.checkout_url) {
+      window.location.href = result.checkout_url;
+      return;
+    }
+
+    setBookingReceipt(result);
+    setBookingVerification(null);
+    setBookingVerificationCode("");
+    setSelectedSlotId("");
+    setBookingForm({
+      client_first_name: "",
+      client_last_name: "",
+      client_email: "",
+      client_phone: "",
+      client_note: "",
+      accept_cgu: false,
+      accept_cgv: false,
+      accept_cancellation_policy: false,
+    });
+
+    const refreshedSlots = await getPublicAvailabilities(slug);
+    setSlots(refreshedSlots);
+  }
+
+  async function handleBookingVerificationSubmit() {
+    if (!bookingVerification) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setBookingError("");
+      const result = await verifyPublicBookingEmail(
+        bookingVerification.id,
+        bookingVerificationCode
+      );
+      await finalizeVerifiedBooking(result);
+    } catch (err) {
+      setBookingError(
+        err instanceof Error
+          ? err.message
+          : "Impossible de vérifier votre email."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleBookingVerificationResend() {
+    if (!bookingVerification) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setBookingError("");
+      const result = await resendPublicBookingVerification(
+        bookingVerification.id,
+        bookingForm.client_email
+      );
+      setBookingVerification(result);
+    } catch (err) {
+      setBookingError(
+        err instanceof Error
+          ? err.message
+          : "Impossible de renvoyer le code."
       );
     } finally {
       setSubmitting(false);
@@ -484,8 +551,11 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
     profile.reservation_payment_mode !== "none" &&
     (!profile.payment_account ||
       profile.payment_account.onboarding_status !== "active" ||
-      !profile.payment_account.charges_enabled)
-      ? "Le règlement en ligne n’est pas encore disponible pour ce praticien. Vous pourrez réserver dès que son compte de paiement sera activé."
+      !profile.payment_account.charges_enabled ||
+      (profile.reservation_payment_mode === "full" && !profile.verification_badge))
+      ? profile.reservation_payment_mode === "full" && !profile.verification_badge
+        ? "Le paiement total à la réservation est réservé aux praticiens vérifiés. Vous pouvez continuer avec une demande de rendez-vous ou attendre l’activation complète du paiement."
+        : "Le règlement en ligne n’est pas encore disponible pour ce praticien. Vous pourrez réserver dès que son compte de paiement sera activé."
       : "";
   const practiceInfoCards = getPracticeInfoCards(draft);
   const essentials = [
@@ -721,6 +791,9 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
                 </div>
 
                 <div className="mt-5 flex gap-2">
+                  {!previewMode ? (
+                    <FavoritePractitionerButton professionalSlug={draft.slug} />
+                  ) : null}
                   <Button
                     variant="secondary"
                     size="sm"
@@ -1093,6 +1166,8 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
               bookingForm={bookingForm}
               bookingError={bookingError}
               bookingReceipt={bookingReceipt}
+              verificationPending={bookingVerification}
+              verificationCode={bookingVerificationCode}
               paymentPreview={paymentPreview}
               submitting={submitting}
               onSelectService={setSelectedServiceId}
@@ -1104,6 +1179,9 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
                 }))
               }
               onSubmit={handleBookingSubmit}
+              onVerificationCodeChange={setBookingVerificationCode}
+              onSubmitVerification={handleBookingVerificationSubmit}
+              onResendVerification={handleBookingVerificationResend}
             />
 
             <Card className="rounded-[2rem]">

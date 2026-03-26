@@ -337,6 +337,13 @@ class Booking(TimeStampedUUIDModel):
     provider_refund_id = models.CharField("identifiant remboursement", max_length=120, blank=True)
     provider_payout_id = models.CharField("identifiant versement", max_length=120, blank=True)
     payout_blocked_reason = models.CharField("raison blocage versement", max_length=220, blank=True)
+    guest_identity = models.ForeignKey(
+        "GuestBookingIdentity",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="bookings",
+    )
 
     class Meta:
         verbose_name = "réservation"
@@ -544,3 +551,357 @@ class PaymentWebhookEventLog(TimeStampedUUIDModel):
         verbose_name = "journal webhook paiement"
         verbose_name_plural = "journaux webhook paiement"
         ordering = ("-created_at",)
+
+
+class GuestBookingIdentity(TimeStampedUUIDModel):
+    class VerificationStatus(models.TextChoices):
+        PENDING = "pending", "En attente"
+        VERIFIED = "verified", "Vérifié"
+        EXPIRED = "expired", "Expiré"
+        BLOCKED = "blocked", "Bloqué"
+        COMPLETED = "completed", "Réservation créée"
+        CANCELED = "canceled", "Annulé"
+
+    professional = models.ForeignKey(
+        ProfessionalProfile,
+        on_delete=models.CASCADE,
+        related_name="guest_booking_identities",
+    )
+    service = models.ForeignKey(
+        MassageService,
+        on_delete=models.PROTECT,
+        related_name="guest_booking_identities",
+    )
+    slot = models.ForeignKey(
+        AvailabilitySlot,
+        on_delete=models.PROTECT,
+        related_name="guest_booking_identities",
+    )
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="guest_identity_records",
+    )
+    client_first_name = models.CharField("prénom", max_length=120)
+    client_last_name = models.CharField("nom", max_length=120)
+    client_email = models.EmailField("email")
+    client_phone = models.CharField("téléphone", max_length=30, blank=True)
+    client_note = models.TextField("note client", blank=True)
+    consent_cgu = models.BooleanField("CGU acceptées", default=False)
+    consent_cgv = models.BooleanField("CGV acceptées", default=False)
+    consent_cancellation_policy = models.BooleanField(
+        "politique d'annulation acceptée",
+        default=False,
+    )
+    consented_at = models.DateTimeField("consentement donné le", null=True, blank=True)
+    consent_version = models.CharField("version de consentement", max_length=40, blank=True)
+    consent_snapshot_json = models.JSONField(default=dict, blank=True)
+    verification_status = models.CharField(
+        "statut de vérification email",
+        max_length=20,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.PENDING,
+    )
+    email_verified_at = models.DateTimeField("email vérifié le", null=True, blank=True)
+    last_verification_sent_at = models.DateTimeField(
+        "dernier code envoyé le",
+        null=True,
+        blank=True,
+    )
+    verification_resend_count = models.PositiveIntegerField("renvois", default=0)
+    booking_access_revoked = models.BooleanField("accès révoqué", default=False)
+
+    class Meta:
+        verbose_name = "identité invitée de réservation"
+        verbose_name_plural = "identités invitées de réservation"
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("client_email", "verification_status")),
+            models.Index(fields=("slot", "verification_status")),
+        ]
+
+
+class BookingEmailVerification(TimeStampedUUIDModel):
+    class Status(models.TextChoices):
+        PENDING = "pending", "En attente"
+        VERIFIED = "verified", "Vérifié"
+        EXPIRED = "expired", "Expiré"
+        BLOCKED = "blocked", "Bloqué"
+
+    guest_identity = models.ForeignKey(
+        GuestBookingIdentity,
+        on_delete=models.CASCADE,
+        related_name="email_verifications",
+    )
+    code_hash = models.CharField("hash du code", max_length=128)
+    expires_at = models.DateTimeField("expire le")
+    status = models.CharField(
+        "statut",
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    attempts_count = models.PositiveIntegerField("tentatives", default=0)
+    max_attempts = models.PositiveIntegerField("tentatives max", default=5)
+    sent_to_email = models.EmailField("email destinataire")
+    sent_at = models.DateTimeField("envoyé le", null=True, blank=True)
+    verified_at = models.DateTimeField("vérifié le", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "vérification email réservation"
+        verbose_name_plural = "vérifications email réservation"
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("guest_identity", "status")),
+            models.Index(fields=("expires_at",)),
+        ]
+
+
+class IncidentReport(TimeStampedUUIDModel):
+    class ReporterType(models.TextChoices):
+        CLIENT = "client", "Client"
+        PRACTITIONER = "practitioner", "Praticien"
+        ADMIN = "admin", "Admin"
+        SYSTEM = "system", "Système"
+
+    class ReportedPartyType(models.TextChoices):
+        CLIENT = "client", "Client"
+        PRACTITIONER = "practitioner", "Praticien"
+        PLATFORM = "platform", "Plateforme"
+        UNKNOWN = "unknown", "Non précisé"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Ouvert"
+        IN_REVIEW = "in_review", "En revue"
+        RESOLVED = "resolved", "Résolu"
+        REJECTED = "rejected", "Rejeté"
+
+    class Severity(models.TextChoices):
+        LOW = "low", "Faible"
+        MEDIUM = "medium", "Moyen"
+        HIGH = "high", "Élevé"
+        CRITICAL = "critical", "Critique"
+
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.CASCADE,
+        related_name="incidents",
+    )
+    reporter_type = models.CharField(max_length=20, choices=ReporterType.choices)
+    reported_party_type = models.CharField(
+        max_length=20,
+        choices=ReportedPartyType.choices,
+        default=ReportedPartyType.UNKNOWN,
+    )
+    category = models.CharField("catégorie", max_length=60)
+    description = models.TextField("description")
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+    severity = models.CharField(
+        max_length=20,
+        choices=Severity.choices,
+        default=Severity.MEDIUM,
+    )
+    payout_frozen = models.BooleanField("versement gelé", default=True)
+    admin_notes = models.TextField("notes admin", blank=True)
+    resolution = models.CharField("résolution", max_length=120, blank=True)
+    resolved_at = models.DateTimeField("résolu le", null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resolved_incident_reports",
+    )
+
+    class Meta:
+        verbose_name = "signalement de réservation"
+        verbose_name_plural = "signalements de réservation"
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("booking", "status")),
+            models.Index(fields=("severity", "status")),
+        ]
+
+
+class IncidentEvidence(TimeStampedUUIDModel):
+    incident = models.ForeignKey(
+        IncidentReport,
+        on_delete=models.CASCADE,
+        related_name="evidences",
+    )
+    note = models.CharField("note", max_length=220, blank=True)
+    file = models.FileField("fichier", upload_to="bookings/incidents/", blank=True)
+    submitted_by_role = models.CharField(
+        max_length=20,
+        choices=IncidentReport.ReporterType.choices,
+        default=IncidentReport.ReporterType.CLIENT,
+    )
+
+    class Meta:
+        verbose_name = "preuve de signalement"
+        verbose_name_plural = "preuves de signalement"
+        ordering = ("created_at",)
+
+
+class IncidentDecision(TimeStampedUUIDModel):
+    incident = models.ForeignKey(
+        IncidentReport,
+        on_delete=models.CASCADE,
+        related_name="decisions",
+    )
+    decision_type = models.CharField("type de décision", max_length=40)
+    notes = models.TextField("notes", blank=True)
+    amount_eur = models.DecimalField(
+        "montant concerné",
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="incident_decisions",
+    )
+
+    class Meta:
+        verbose_name = "décision de signalement"
+        verbose_name_plural = "décisions de signalement"
+        ordering = ("created_at",)
+
+
+class RiskRegisterEntry(TimeStampedUUIDModel):
+    class SubjectType(models.TextChoices):
+        PRACTITIONER = "practitioner", "Praticien"
+        CLIENT_EMAIL = "client_email", "Client par email"
+        CLIENT_PHONE = "client_phone", "Client par téléphone"
+
+    class RiskLevel(models.TextChoices):
+        NONE = "none", "Aucun"
+        LOW = "low", "Faible"
+        MEDIUM = "medium", "Moyen"
+        HIGH = "high", "Élevé"
+        BLOCKED = "blocked", "Bloqué"
+
+    class BookingRestrictionStatus(models.TextChoices):
+        NONE = "none", "Aucune restriction"
+        REVIEW_REQUIRED = "review_required", "Revue requise"
+        BLOCKED = "blocked", "Bloqué"
+
+    class PractitionerTrustStatus(models.TextChoices):
+        NONE = "none", "Normal"
+        WATCH = "watch", "Sous surveillance"
+        RESTRICTED = "restricted", "Restreint"
+        SUSPENDED = "suspended", "Suspendu"
+
+    subject_type = models.CharField(max_length=20, choices=SubjectType.choices)
+    professional = models.ForeignKey(
+        ProfessionalProfile,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="risk_entries",
+    )
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="risk_entries",
+    )
+    client_email = models.EmailField(blank=True)
+    client_phone = models.CharField(max_length=30, blank=True)
+    risk_level = models.CharField(
+        max_length=20,
+        choices=RiskLevel.choices,
+        default=RiskLevel.NONE,
+    )
+    booking_restriction_status = models.CharField(
+        max_length=20,
+        choices=BookingRestrictionStatus.choices,
+        default=BookingRestrictionStatus.NONE,
+    )
+    practitioner_trust_status = models.CharField(
+        max_length=20,
+        choices=PractitionerTrustStatus.choices,
+        default=PractitionerTrustStatus.NONE,
+    )
+    reason = models.CharField(max_length=220)
+    details = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_risk_entries",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "entrée registre de risque"
+        verbose_name_plural = "registre de risque"
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("subject_type", "risk_level", "is_active")),
+            models.Index(fields=("client_email", "is_active")),
+            models.Index(fields=("professional", "is_active")),
+        ]
+
+
+class BookingThread(TimeStampedUUIDModel):
+    booking = models.OneToOneField(
+        Booking,
+        on_delete=models.CASCADE,
+        related_name="thread",
+    )
+    client_last_read_at = models.DateTimeField(null=True, blank=True)
+    practitioner_last_read_at = models.DateTimeField(null=True, blank=True)
+    last_message_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "fil de discussion réservation"
+        verbose_name_plural = "fils de discussion réservation"
+
+
+class BookingMessage(TimeStampedUUIDModel):
+    class SenderRole(models.TextChoices):
+        CLIENT = "client", "Client"
+        PRACTITIONER = "practitioner", "Praticien"
+        ADMIN = "admin", "Admin"
+        SYSTEM = "system", "Système"
+
+    thread = models.ForeignKey(
+        BookingThread,
+        on_delete=models.CASCADE,
+        related_name="messages",
+    )
+    sender_role = models.CharField(max_length=20, choices=SenderRole.choices)
+    sender_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="booking_messages",
+    )
+    guest_email = models.EmailField(blank=True)
+    body = models.TextField("message")
+    contains_external_link = models.BooleanField(default=False)
+    is_flagged = models.BooleanField(default=False)
+    read_by_client_at = models.DateTimeField(null=True, blank=True)
+    read_by_practitioner_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "message de réservation"
+        verbose_name_plural = "messages de réservation"
+        ordering = ("created_at",)

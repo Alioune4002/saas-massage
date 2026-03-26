@@ -21,6 +21,7 @@ function resolveApiBase() {
 
 export const API_STATUS_EVENT = "nuadyx:api-status";
 const API_STATUS_STORAGE_KEY = "nuadyx-api-status";
+const GUEST_FAVORITES_TOKEN_KEY = "nuadyx-guest-favorites-token";
 
 export type ApiAvailabilityState = {
   available: boolean;
@@ -123,6 +124,16 @@ export function isApiUnavailableError(
 function getStoredToken(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem("massage_saas_token");
+}
+
+function getStoredGuestFavoritesToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(GUEST_FAVORITES_TOKEN_KEY);
+}
+
+function setStoredGuestFavoritesToken(token: string) {
+  if (typeof window === "undefined" || !token) return;
+  window.localStorage.setItem(GUEST_FAVORITES_TOKEN_KEY, token);
 }
 
 export function setStoredToken(token: string) {
@@ -925,6 +936,18 @@ export type CreatePublicBookingPayload = {
   client_email: string;
   client_phone?: string;
   client_note?: string;
+  accept_cgu: boolean;
+  accept_cgv: boolean;
+  accept_cancellation_policy: boolean;
+};
+
+export type PublicBookingVerificationPending = {
+  id: string;
+  verification_status: "pending" | "verified" | "expired" | "blocked" | "completed" | "canceled";
+  masked_email: string;
+  expires_at: string | null;
+  verification_resend_count: number;
+  message: string;
 };
 
 export type PublicBookingCreated = {
@@ -946,9 +969,36 @@ export type PublicBookingCreated = {
   checkout_url: string;
   checkout_session_id: string;
   payment_test_mode: boolean;
+  guest_access_token: string;
   client_first_name: string;
   client_last_name: string;
   client_email: string;
+};
+
+export type BookingThreadMessage = {
+  id: string;
+  sender_role: "client" | "practitioner" | "admin" | "system";
+  guest_email: string;
+  body: string;
+  contains_external_link: boolean;
+  is_flagged: boolean;
+  created_at: string;
+};
+
+export type BookingIncident = {
+  id: string;
+  reporter_type: "client" | "practitioner" | "admin" | "system";
+  reported_party_type: "client" | "practitioner" | "platform" | "unknown";
+  category: string;
+  description: string;
+  status: "open" | "in_review" | "resolved" | "rejected";
+  severity: "low" | "medium" | "high" | "critical";
+  payout_frozen: boolean;
+  admin_notes: string;
+  resolution: string;
+  resolved_at: string | null;
+  created_at: string;
+  evidences_count: number;
 };
 
 export type PaymentOverview = {
@@ -1055,6 +1105,107 @@ export type DirectoryInterestPayload = {
   source_page: string;
 };
 
+export type FavoritePractitioner = {
+  id: string;
+  business_name: string;
+  slug: string;
+  city: string;
+  public_headline: string;
+  profile_photo_url: string;
+  verification_badge: VerificationBadge | null;
+  created_at: string;
+};
+
+export type GuestFavoritesResponse = {
+  collection_token: string;
+  favorites: FavoritePractitioner[];
+};
+
+export type LocationSuggestion = {
+  kind: "city" | "postal_code" | "department" | "region" | "country";
+  label: string;
+  slug: string;
+  city: string;
+  postal_code: string;
+  department_name: string;
+  region: string;
+  country: string;
+  directory_url: string;
+};
+
+export type PractitionerContactTag = {
+  id: string;
+  label: string;
+  created_at: string;
+};
+
+export type PractitionerContact = {
+  id: string;
+  display_name: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  booking_count: number;
+  validated_booking_count: number;
+  canceled_booking_count: number;
+  no_show_count: number;
+  disputed_booking_count: number;
+  first_booking_at: string | null;
+  last_booking_at: string | null;
+  last_validated_at: string | null;
+  segment:
+    | "new"
+    | "active"
+    | "loyal"
+    | "never_seen"
+    | "canceled"
+    | "no_show"
+    | "watch"
+    | "dispute"
+    | "blocked"
+    | "inactive";
+  segment_label: string;
+  segment_score: number;
+  segment_reasons_json: string[];
+  risk_level: "none" | "low" | "medium" | "high" | "blocked";
+  risk_label: string;
+  is_trusted: boolean;
+  private_note: string;
+  tags: PractitionerContactTag[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CityCoverageMetric = {
+  city: string;
+  objective: number;
+  total_profiles: number;
+  claimed_profiles: number;
+  unclaimed_profiles: number;
+  active_profiles: number;
+  contacts_sent: number;
+  claim_rate: number;
+  interest_count: number;
+  coverage_stage: string;
+  recommended_action: string;
+};
+
+export type DirectoryInterestLeadRecord = {
+  id: string;
+  kind: DirectoryInterestPayload["kind"];
+  kind_label: string;
+  full_name: string;
+  email: string;
+  city: string;
+  practitioner_name: string;
+  message: string;
+  source_page: string;
+  processed: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export async function loginWithEmailPassword(payload: {
   email: string;
   password: string;
@@ -1157,6 +1308,8 @@ export async function getDirectoryListings(filters?: {
   city?: string;
   q?: string;
   category?: string;
+  locationType?: string;
+  locationSlug?: string;
 }) {
   return getPublicDirectoryListings(filters);
 }
@@ -1165,6 +1318,8 @@ export async function getPublicDirectoryListings(filters?: {
   city?: string;
   q?: string;
   category?: string;
+  locationType?: string;
+  locationSlug?: string;
 }) {
   const params = new URLSearchParams();
   if (filters?.city) {
@@ -1175,6 +1330,12 @@ export async function getPublicDirectoryListings(filters?: {
   }
   if (filters?.category) {
     params.set("category", filters.category);
+  }
+  if (filters?.locationType) {
+    params.set("location_type", filters.locationType);
+  }
+  if (filters?.locationSlug) {
+    params.set("location_slug", filters.locationSlug);
   }
   const query = params.toString();
   return apiRequest<DirectoryListing[]>(
@@ -1252,6 +1413,59 @@ export async function submitDirectoryInterest(payload: DirectoryInterestPayload)
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function getGuestFavorites() {
+  const token = getStoredGuestFavoritesToken();
+  const headers = token ? { "X-Guest-Favorites-Token": token } : undefined;
+  const response = await apiRequest<GuestFavoritesResponse>("/public/favorites", {
+    method: "GET",
+    headers,
+  });
+  if (response.collection_token) {
+    setStoredGuestFavoritesToken(response.collection_token);
+  }
+  return response;
+}
+
+export async function addGuestFavorite(professionalSlug: string) {
+  const token = getStoredGuestFavoritesToken();
+  const headers = token ? { "X-Guest-Favorites-Token": token } : undefined;
+  const response = await apiRequest<{
+    collection_token: string;
+    added: boolean;
+    favorite: FavoritePractitioner;
+  }>("/public/favorites", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ professional_slug: professionalSlug, token }),
+  });
+  if (response.collection_token) {
+    setStoredGuestFavoritesToken(response.collection_token);
+  }
+  return response;
+}
+
+export async function removeGuestFavorite(professionalSlug: string) {
+  const token = getStoredGuestFavoritesToken();
+  const headers = token ? { "X-Guest-Favorites-Token": token } : undefined;
+  return apiRequest<void>(`/public/favorites/${professionalSlug}`, {
+    method: "DELETE",
+    headers,
+  });
+}
+
+export async function getLocationSuggestions(query: string) {
+  const params = new URLSearchParams();
+  if (query.trim()) {
+    params.set("q", query.trim());
+  }
+  return apiRequest<LocationSuggestion[]>(
+    `/public/location-suggestions${params.toString() ? `?${params.toString()}` : ""}`,
+    {
+      method: "GET",
+    }
+  );
 }
 
 export async function getUnifiedPublicPractitioner(slug: string) {
@@ -1454,6 +1668,12 @@ export async function createContactCampaign(payload: Partial<ContactCampaignReco
   });
 }
 
+export async function getAdminContactCampaigns() {
+  return apiRequest<ContactCampaignRecord[]>("/admin/contact-campaigns", {
+    auth: true,
+  });
+}
+
 export async function sendContactCampaign(id: string) {
   return apiRequest<{ sent: number; failed: number; total_targets: number }>(
     `/admin/contact-campaigns/${id}/send`,
@@ -1467,6 +1687,107 @@ export async function sendContactCampaign(id: string) {
 export async function getRemovalRequests(status?: string) {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   return apiRequest<RemovalRequestRecord[]>(`/admin/removal-requests${query}`, {
+    auth: true,
+  });
+}
+
+export async function getAdminAcquisitionCoverage(objective = 10) {
+  return apiRequest<CityCoverageMetric[]>(
+    `/admin/acquisition/coverage?objective=${objective}`,
+    {
+      auth: true,
+    }
+  );
+}
+
+export async function getAdminAcquisitionSuggestions(filters?: {
+  city?: string;
+  kind?: DirectoryInterestPayload["kind"];
+  processed?: boolean;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.city) {
+    params.set("city", filters.city);
+  }
+  if (filters?.kind) {
+    params.set("kind", filters.kind);
+  }
+  if (typeof filters?.processed === "boolean") {
+    params.set("processed", String(filters.processed));
+  }
+  return apiRequest<DirectoryInterestLeadRecord[]>(
+    `/admin/acquisition/suggestions${params.toString() ? `?${params.toString()}` : ""}`,
+    {
+      auth: true,
+    }
+  );
+}
+
+export async function getDashboardContacts(filters?: {
+  segment?: PractitionerContact["segment"];
+  q?: string;
+  tag?: string;
+  trusted?: boolean;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.segment) {
+    params.set("segment", filters.segment);
+  }
+  if (filters?.q) {
+    params.set("q", filters.q);
+  }
+  if (filters?.tag) {
+    params.set("tag", filters.tag);
+  }
+  if (typeof filters?.trusted === "boolean") {
+    params.set("trusted", String(filters.trusted));
+  }
+  return apiRequest<PractitionerContact[]>(
+    `/dashboard/contacts/${params.toString() ? `?${params.toString()}` : ""}`,
+    {
+      auth: true,
+    }
+  );
+}
+
+export async function getDashboardContact(id: string) {
+  return apiRequest<PractitionerContact>(`/dashboard/contacts/${id}/`, {
+    auth: true,
+  });
+}
+
+export async function updateDashboardContact(
+  id: string,
+  payload: {
+    private_note?: string;
+    tag_labels?: string[];
+    is_trusted?: boolean;
+  }
+) {
+  return apiRequest<PractitionerContact>(`/dashboard/contacts/${id}/`, {
+    method: "PATCH",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getDashboardContactTags() {
+  return apiRequest<PractitionerContactTag[]>("/dashboard/contact-tags/", {
+    auth: true,
+  });
+}
+
+export async function createDashboardContactTag(label: string) {
+  return apiRequest<PractitionerContactTag>("/dashboard/contact-tags/", {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({ label }),
+  });
+}
+
+export async function deleteDashboardContactTag(id: string) {
+  return apiRequest<void>(`/dashboard/contact-tags/${id}/`, {
+    method: "DELETE",
     auth: true,
   });
 }
@@ -1686,9 +2007,32 @@ export async function recordManualPayment(id: string, paymentChannel: Booking["p
 }
 
 export async function createPublicBooking(data: CreatePublicBookingPayload) {
-  return apiRequest<PublicBookingCreated>("/bookings/", {
+  return apiRequest<PublicBookingVerificationPending>("/bookings/", {
     method: "POST",
     body: JSON.stringify(data),
+  });
+}
+
+export async function verifyPublicBookingEmail(guestIdentityId: string, code: string) {
+  return apiRequest<PublicBookingCreated>("/bookings/verify-email/", {
+    method: "POST",
+    body: JSON.stringify({
+      guest_identity_id: guestIdentityId,
+      code,
+    }),
+  });
+}
+
+export async function resendPublicBookingVerification(
+  guestIdentityId: string,
+  clientEmail: string
+) {
+  return apiRequest<PublicBookingVerificationPending>("/bookings/resend-verification/", {
+    method: "POST",
+    body: JSON.stringify({
+      guest_identity_id: guestIdentityId,
+      client_email: clientEmail,
+    }),
   });
 }
 
@@ -1714,6 +2058,38 @@ export async function validateServiceCompletion(
   }>(`/bookings/${bookingId}/validate-service/`, {
     method: "POST",
     body: JSON.stringify({ token, action, reason }),
+  });
+}
+
+export async function getPublicBookingThread(bookingId: string, token: string) {
+  return apiRequest<{
+    booking_id: string;
+    messages: BookingThreadMessage[];
+  }>(`/bookings/${bookingId}/thread/?token=${encodeURIComponent(token)}`);
+}
+
+export async function sendPublicBookingMessage(
+  bookingId: string,
+  token: string,
+  message: string
+) {
+  return apiRequest<BookingThreadMessage>(`/bookings/${bookingId}/thread/`, {
+    method: "POST",
+    body: JSON.stringify({ token, message }),
+  });
+}
+
+export async function createPublicBookingIncident(
+  bookingId: string,
+  token: string,
+  category: string,
+  description: string
+) {
+  return apiRequest<{
+    incident: BookingIncident | null;
+  }>(`/bookings/${bookingId}/incident/`, {
+    method: "POST",
+    body: JSON.stringify({ token, category, description }),
   });
 }
 

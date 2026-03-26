@@ -63,6 +63,8 @@ export function buildPublicPaymentPreview(
   profile: PaymentConfigLike,
   service: PublicService | null
 ) {
+  const fullRefundHours = 48;
+  const partialRefundHours = 24;
   const total = Number(service?.price_eur ?? 0);
   const depositValue = Number(profile.deposit_value ?? 0);
 
@@ -95,11 +97,14 @@ export function buildPublicPaymentPreview(
     buttonLabel = "Continuer vers le règlement";
   }
 
-  const cancellationSummary = profile.keep_payment_after_deadline
-    ? `Annulation sans frais jusqu’à ${profile.free_cancellation_notice_hours} h avant le rendez-vous. Passé ce délai, ${
-        profile.reservation_payment_mode === "full" ? "le règlement peut être conservé." : "l’acompte est conservé."
-      }`
-    : `Annulation sans frais jusqu’à ${profile.free_cancellation_notice_hours} h avant le rendez-vous. Passé ce délai, le praticien étudie le remboursement au cas par cas.`;
+  const cancellationSummary =
+    profile.reservation_payment_mode === "none"
+      ? "Annulation sans frais jusqu’à 48 h avant le rendez-vous. Entre 48 h et 24 h avant, un remboursement partiel peut s’appliquer si un acompte a été payé. Moins de 24 h avant ou en cas d’absence, l’acompte peut être conservé."
+      : `Annulation sans frais jusqu’à ${fullRefundHours} h avant le rendez-vous. Entre ${fullRefundHours} h et ${partialRefundHours} h avant, 50 % de l’acompte peut être remboursé. Moins de ${partialRefundHours} h avant ou en cas d’absence, ${
+          profile.reservation_payment_mode === "full"
+            ? "le règlement peut être conservé selon les conditions prévues."
+            : "l’acompte peut être conservé."
+        }`;
 
   return {
     total,

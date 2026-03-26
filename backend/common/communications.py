@@ -68,6 +68,7 @@ def send_new_booking_request_email(booking):
         f"Client : {booking.client_first_name} {booking.client_last_name}\n"
         f"Email : {booking.client_email}\n"
         f"Téléphone : {booking.client_phone or 'Non renseigné'}\n\n"
+        f"Note client : {booking.client_note or 'Aucune note transmise'}\n\n"
         f"Statut du règlement : {booking.get_payment_status_display()}\n"
         f"Montant demandé maintenant : {booking.amount_due_now_eur} €\n"
         f"Reste éventuel : {booking.amount_remaining_eur} €\n\n"
@@ -159,6 +160,24 @@ def send_booking_requested_email_to_client(booking):
         subject=subject,
         message=message,
         recipients=[booking.client_email],
+    )
+
+
+def send_booking_email_verification_code(guest_identity, verification, *, code: str):
+    subject = f"Vérifiez votre email pour finaliser votre réservation avec {guest_identity.professional.business_name}"
+    message = (
+        f"Bonjour {guest_identity.client_first_name},\n\n"
+        "Nous avons bien reçu votre demande de réservation sur NUADYX.\n"
+        "Avant de transmettre définitivement votre demande, merci de vérifier votre adresse email.\n\n"
+        f"Code de vérification : {code}\n"
+        f"Ce code expire le {formats.date_format(timezone.localtime(verification.expires_at), 'j F Y à H:i')}.\n\n"
+        "Si vous n'êtes pas à l'origine de cette demande, vous pouvez simplement ignorer cet email.\n"
+        "Aucun rendez-vous ne sera confirmé tant que l'email n'aura pas été vérifié."
+    )
+    _send_transactional_email(
+        subject=subject,
+        message=message,
+        recipients=[guest_identity.client_email],
     )
 
 

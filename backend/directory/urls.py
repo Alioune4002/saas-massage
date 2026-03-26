@@ -1,6 +1,8 @@
 from django.urls import path
 
 from .views import (
+    AdminAcquisitionCoverageView,
+    AdminAcquisitionSuggestionsView,
     AdminContactCampaignCreateView,
     AdminContactCampaignSendView,
     AdminImportedProfilesBulkActionView,
@@ -32,6 +34,8 @@ urlpatterns = [
     path("admin/imported-profiles/bulk-action", AdminImportedProfilesBulkActionView.as_view(), name="admin-imported-profiles-bulk-action"),
     path("admin/contact-campaigns", AdminContactCampaignCreateView.as_view(), name="admin-contact-campaigns"),
     path("admin/contact-campaigns/<uuid:pk>/send", AdminContactCampaignSendView.as_view(), name="admin-contact-campaign-send"),
+    path("admin/acquisition/coverage", AdminAcquisitionCoverageView.as_view(), name="admin-acquisition-coverage"),
+    path("admin/acquisition/suggestions", AdminAcquisitionSuggestionsView.as_view(), name="admin-acquisition-suggestions"),
     path("admin/removal-requests", AdminRemovalRequestsView.as_view(), name="admin-removal-requests"),
     path("public/practitioners/<slug:slug>", PublicPractitionerDetailView.as_view(), name="public-practitioner-detail-unified"),
     path("public/imported-profiles/<uuid:pk>/request-claim", PublicClaimRequestView.as_view(), name="public-imported-profile-request-claim"),

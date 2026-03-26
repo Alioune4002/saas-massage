@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { DirectoryListingGrid } from "@/components/directory/directory-listing-grid";
+import { LocationAutosuggest } from "@/components/directory/location-autosuggest";
+import { LaunchInterestForm } from "@/components/marketing/launch-interest-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,12 +17,18 @@ type DirectoryBrowserPageProps = {
   title: string;
   description: string;
   city?: string;
+  locationType?: string;
+  locationSlug?: string;
+  locationLabel?: string;
 };
 
 export function DirectoryBrowserPage({
   title,
   description,
   city,
+  locationType,
+  locationSlug,
+  locationLabel,
 }: DirectoryBrowserPageProps) {
   const [items, setItems] = useState<DirectoryListing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +44,8 @@ export function DirectoryBrowserPage({
         const data = await getPublicDirectoryListings({
           city,
           q: query || undefined,
+          locationType,
+          locationSlug,
         });
         if (!active) {
           return;
@@ -58,7 +68,7 @@ export function DirectoryBrowserPage({
     return () => {
       active = false;
     };
-  }, [city, query]);
+  }, [city, locationSlug, locationType, query]);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10">
@@ -72,16 +82,22 @@ export function DirectoryBrowserPage({
             {description}
           </p>
           <div className="mt-6 max-w-xl">
-            <FieldWrapper
-              label="Rechercher un praticien"
-              hint="Nom ou ville"
-            >
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Ex. Quimper, relaxation, cabinet..."
+            <div className="grid gap-4">
+              <LocationAutosuggest
+                defaultValue={locationLabel || city || ""}
+                hint="Ville, code postal, département ou région"
               />
-            </FieldWrapper>
+              <FieldWrapper
+                label="Affiner la recherche"
+                hint="Nom, spécialité ou mot-clé"
+              >
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Ex. relaxation, drainage, cabinet..."
+                />
+              </FieldWrapper>
+            </div>
           </div>
         </Card>
 
@@ -112,6 +128,20 @@ export function DirectoryBrowserPage({
       <section className="mt-8">
         {error ? <Notice tone="error">{error}</Notice> : null}
         <DirectoryListingGrid items={items} loading={loading} />
+      </section>
+
+      <section className="mt-8 grid gap-4 xl:grid-cols-2">
+        <LaunchInterestForm
+          kind="suggest_practitioner"
+          title="Suggérer un praticien"
+          description="Conseillez un praticien à ajouter à l’annuaire. La suggestion part en revue interne avant toute action."
+        />
+        <LaunchInterestForm
+          kind="recommend_masseur"
+          title="Recommander mon masseur"
+          description="Aidez-nous à mieux couvrir votre ville sans créer automatiquement de fiche publique."
+          practitionerLabel="Nom du masseur recommandé"
+        />
       </section>
     </main>
   );

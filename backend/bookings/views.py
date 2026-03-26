@@ -1,5 +1,8 @@
 import datetime as dt
+import hashlib
 import json
+import re
+import secrets
 from decimal import Decimal
 
 from django.conf import settings
@@ -15,6 +18,7 @@ from rest_framework.views import APIView
 from common.communications import (
     send_booking_canceled_email,
     send_booking_confirmed_email,
+    send_booking_email_verification_code,
     send_booking_payment_action_required_email,
     send_booking_payment_captured_email,
     send_booking_requested_email_to_client,
@@ -27,8 +31,14 @@ from professionals.models import ProfessionalPaymentAccount
 from .models import (
     AvailabilitySlot,
     Booking,
+    BookingEmailVerification,
+    BookingMessage,
+    BookingThread,
+    GuestBookingIdentity,
+    IncidentReport,
     BookingPayment,
     PaymentWebhookEventLog,
+    RiskRegisterEntry,
     TrustedClient,
 )
 from .payments import (
@@ -61,9 +71,13 @@ from .serializers import (
     ProfessionalAgendaSerializer,
     ProfessionalAvailabilitySerializer,
     ProfessionalBookingSerializer,
+    PublicBookingEmailVerificationSerializer,
     PublicAvailabilitySerializer,
-    PublicBookingCreateSerializer,
+    PublicBookingIntentSerializer,
     PublicBookingCreatedSerializer,
+    PublicBookingVerificationStatusSerializer,
+    BookingMessageSerializer,
+    IncidentReportSerializer,
     TrustedClientSerializer,
     ManualPaymentSerializer,
 )
@@ -71,6 +85,76 @@ from .serializers import (
 
 def _expire_stale_payment_holds():
     expire_stale_payment_holds()
+
+
+def _build_guest_access_token(booking: Booking) -> str:
+    return generate_client_action_token(booking=booking, purpose="guest-booking")
+
+
+def _verify_guest_access_token(booking: Booking, token: str) -> bool:
+    return verify_client_action_token(
+        booking=booking,
+        purpose="guest-booking",
+        token=token,
+        max_age_hours=24 * 30,
+    )
+
+
+def _booking_email_verification_minutes() -> int:
+    return int(getattr(settings, "NUADYX_BOOKING_EMAIL_VERIFICATION_MINUTES", 15))
+
+
+def _booking_email_max_resends() -> int:
+    return int(getattr(settings, "NUADYX_BOOKING_EMAIL_MAX_RESENDS", 3))
+
+
+def _booking_email_max_attempts() -> int:
+    return int(getattr(settings, "NUADYX_BOOKING_EMAIL_MAX_ATTEMPTS", 5))
+
+
+def _guest_booking_hold_minutes() -> int:
+    return int(getattr(settings, "NUADYX_GUEST_BOOKING_HOLD_MINUTES", 30))
+
+
+def _incident_report_window_hours() -> int:
+    return int(getattr(settings, "NUADYX_INCIDENT_REPORT_WINDOW_HOURS", 48))
+
+
+def _issue_booking_email_verification(
+    guest_identity: GuestBookingIdentity,
+    *,
+    increment_resend_count: bool = True,
+):
+    guest_identity.email_verifications.filter(
+        status=BookingEmailVerification.Status.PENDING
+    ).update(status=BookingEmailVerification.Status.EXPIRED)
+    code = f"{secrets.randbelow(1000000):06d}"
+    verification = BookingEmailVerification.objects.create(
+        guest_identity=guest_identity,
+        code_hash=hashlib.sha256(code.encode()).hexdigest(),
+        expires_at=timezone.now() + dt.timedelta(minutes=_booking_email_verification_minutes()),
+        max_attempts=_booking_email_max_attempts(),
+        sent_to_email=guest_identity.client_email,
+        sent_at=timezone.now(),
+    )
+    guest_identity.verification_status = GuestBookingIdentity.VerificationStatus.PENDING
+    guest_identity.last_verification_sent_at = timezone.now()
+    if increment_resend_count:
+        guest_identity.verification_resend_count += 1
+    guest_identity.save(
+        update_fields=[
+            "verification_status",
+            "last_verification_sent_at",
+            "verification_resend_count",
+            "updated_at",
+        ]
+    )
+    send_booking_email_verification_code(guest_identity, verification, code=code)
+    return verification
+
+
+def _contains_suspicious_link(message: str) -> bool:
+    return bool(re.search(r"https?://|www\.", message, flags=re.IGNORECASE))
 
 
 class PublicAvailabilityListView(generics.ListAPIView):
@@ -111,11 +195,31 @@ class PublicAvailabilityListView(generics.ListAPIView):
 
 class PublicBookingCreateView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
-    serializer_class = PublicBookingCreateSerializer
+    serializer_class = PublicBookingIntentSerializer
 
     def create(self, request, *args, **kwargs):
         _expire_stale_payment_holds()
         serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        guest_identity = serializer.save()
+        verification = _issue_booking_email_verification(
+            guest_identity,
+            increment_resend_count=False,
+        )
+        response_payload = PublicBookingVerificationStatusSerializer(guest_identity).data
+        response_payload["message"] = (
+            "Un code de vérification vient d’être envoyé. Votre réservation ne sera créée qu’après validation de votre email."
+        )
+        response_payload["expires_at"] = verification.expires_at
+        return Response(response_payload, status=status.HTTP_202_ACCEPTED)
+
+
+class PublicBookingVerifyEmailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        _expire_stale_payment_holds()
+        serializer = PublicBookingEmailVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         booking = serializer.save()
 
@@ -157,7 +261,44 @@ class PublicBookingCreateView(generics.CreateAPIView):
         response_payload["payment_test_mode"] = bool(
             checkout_payload and checkout_payload.get("internal_test_token")
         )
+        response_payload["guest_access_token"] = _build_guest_access_token(booking)
         return Response(response_payload, status=status.HTTP_201_CREATED)
+
+
+class PublicBookingResendVerificationView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        guest_identity_id = request.data.get("guest_identity_id")
+        client_email = (request.data.get("client_email") or "").strip().lower()
+        guest_identity = generics.get_object_or_404(
+            GuestBookingIdentity,
+            id=guest_identity_id,
+        )
+        if guest_identity.client_email.lower() != client_email:
+            raise ValidationError("Adresse email de vérification invalide.")
+        if guest_identity.verification_status == GuestBookingIdentity.VerificationStatus.COMPLETED:
+            raise ValidationError("Cette réservation a déjà été vérifiée.")
+        if (
+            guest_identity.last_verification_sent_at
+            and guest_identity.last_verification_sent_at
+            > timezone.now() - dt.timedelta(seconds=45)
+        ):
+            raise ValidationError("Attendez quelques instants avant de demander un nouveau code.")
+        if guest_identity.created_at <= timezone.now() - dt.timedelta(minutes=_guest_booking_hold_minutes()):
+            guest_identity.verification_status = GuestBookingIdentity.VerificationStatus.EXPIRED
+            guest_identity.save(update_fields=["verification_status", "updated_at"])
+            raise ValidationError("Cette demande a expiré. Recommencez votre réservation.")
+        if guest_identity.verification_resend_count >= _booking_email_max_resends():
+            guest_identity.verification_status = GuestBookingIdentity.VerificationStatus.BLOCKED
+            guest_identity.save(update_fields=["verification_status", "updated_at"])
+            raise ValidationError("Trop de demandes de renvoi ont été détectées.")
+
+        verification = _issue_booking_email_verification(guest_identity)
+        payload = PublicBookingVerificationStatusSerializer(guest_identity).data
+        payload["message"] = "Un nouveau code de vérification a été envoyé."
+        payload["expires_at"] = verification.expires_at
+        return Response(payload)
 
 
 class PublicBookingTestPaymentConfirmView(APIView):
@@ -199,10 +340,14 @@ class PublicBookingValidateServiceView(APIView):
 
     def post(self, request, booking_id):
         booking = generics.get_object_or_404(Booking, id=booking_id)
+        dispute_deadline = booking.slot.end_at + dt.timedelta(hours=_incident_report_window_hours())
+        if timezone.now() > dispute_deadline:
+            raise ValidationError("Le délai pour confirmer ou signaler un problème sur cette prestation est dépassé.")
         if not verify_client_action_token(
             booking=booking,
             purpose="service-validation",
             token=request.data.get("token", ""),
+            max_age_hours=_incident_report_window_hours(),
         ):
             raise ValidationError("Lien de validation invalide.")
 
@@ -215,6 +360,84 @@ class PublicBookingValidateServiceView(APIView):
         else:
             booking = validate_client_service_completion(booking=booking)
         return Response(BookingLifecycleSerializer(booking).data)
+
+
+class PublicBookingThreadView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, booking_id):
+        booking = generics.get_object_or_404(Booking, id=booking_id)
+        token = request.query_params.get("token", "")
+        if not _verify_guest_access_token(booking, token):
+            raise ValidationError("Lien d’accès à la réservation invalide.")
+        thread, _created = BookingThread.objects.get_or_create(booking=booking)
+        thread.client_last_read_at = timezone.now()
+        thread.save(update_fields=["client_last_read_at", "updated_at"])
+        return Response(
+            {
+                "booking_id": str(booking.id),
+                "messages": BookingMessageSerializer(
+                    thread.messages.order_by("created_at"),
+                    many=True,
+                ).data,
+            }
+        )
+
+    def post(self, request, booking_id):
+        booking = generics.get_object_or_404(Booking, id=booking_id)
+        token = request.data.get("token", "")
+        if not _verify_guest_access_token(booking, token):
+            raise ValidationError("Lien d’accès à la réservation invalide.")
+        body = (request.data.get("message") or "").strip()
+        if len(body) < 2:
+            raise ValidationError({"message": "Rédigez un message plus complet."})
+        thread, _created = BookingThread.objects.get_or_create(booking=booking)
+        message = BookingMessage.objects.create(
+            thread=thread,
+            sender_role=BookingMessage.SenderRole.CLIENT,
+            guest_email=booking.client_email,
+            body=body,
+            contains_external_link=_contains_suspicious_link(body),
+            is_flagged=_contains_suspicious_link(body),
+        )
+        thread.last_message_at = message.created_at
+        thread.client_last_read_at = message.created_at
+        thread.save(update_fields=["last_message_at", "client_last_read_at", "updated_at"])
+        return Response(BookingMessageSerializer(message).data, status=status.HTTP_201_CREATED)
+
+
+class PublicBookingIncidentView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, booking_id):
+        booking = generics.get_object_or_404(Booking, id=booking_id)
+        token = request.data.get("token", "")
+        if not _verify_guest_access_token(booking, token):
+            raise ValidationError("Lien d’accès à la réservation invalide.")
+        if timezone.now() > booking.slot.end_at + dt.timedelta(hours=_incident_report_window_hours()):
+            raise ValidationError("Le délai pour signaler un problème sur cette réservation est dépassé.")
+
+        description = (request.data.get("description") or "").strip()
+        category = (request.data.get("category") or "client_issue").strip()[:60]
+        if len(description) < 8:
+            raise ValidationError({"description": "Décrivez un peu plus précisément la situation."})
+
+        booking = report_booking_issue(
+            booking=booking,
+            reason=description,
+            actor_role=Booking.ActorRole.CLIENT,
+        )
+        latest_incident = booking.incidents.order_by("-created_at").first()
+        if latest_incident:
+            latest_incident.category = category
+            latest_incident.save(update_fields=["category", "updated_at"])
+        return Response(
+            {
+                "booking": BookingLifecycleSerializer(booking).data,
+                "incident": IncidentReportSerializer(latest_incident).data if latest_incident else None,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ProfessionalAvailabilityViewSet(viewsets.ModelViewSet):
@@ -449,6 +672,46 @@ class ProfessionalBookingViewSet(viewsets.ReadOnlyModelViewSet):
             reason=request.data.get("reason", ""),
         )
         return Response(self.get_serializer(booking).data)
+
+    @action(detail=True, methods=["get", "post"], url_path="messages")
+    def messages(self, request, pk=None):
+        booking = self.get_object()
+        thread, _created = BookingThread.objects.get_or_create(booking=booking)
+
+        if request.method.lower() == "get":
+            thread.practitioner_last_read_at = timezone.now()
+            thread.save(update_fields=["practitioner_last_read_at", "updated_at"])
+            serializer = BookingMessageSerializer(
+                thread.messages.order_by("created_at"),
+                many=True,
+            )
+            return Response(serializer.data)
+
+        body = (request.data.get("message") or "").strip()
+        if len(body) < 2:
+            raise ValidationError({"message": "Le message est trop court."})
+
+        message = BookingMessage.objects.create(
+            thread=thread,
+            sender_role=BookingMessage.SenderRole.PRACTITIONER,
+            sender_user=request.user,
+            body=body,
+            contains_external_link=_contains_suspicious_link(body),
+            is_flagged=_contains_suspicious_link(body),
+        )
+        thread.last_message_at = message.created_at
+        thread.practitioner_last_read_at = message.created_at
+        thread.save(update_fields=["last_message_at", "practitioner_last_read_at", "updated_at"])
+        return Response(BookingMessageSerializer(message).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get"], url_path="incidents")
+    def incidents(self, request, pk=None):
+        booking = self.get_object()
+        serializer = IncidentReportSerializer(
+            booking.incidents.order_by("-created_at"),
+            many=True,
+        )
+        return Response(serializer.data)
 
 
 class ProfessionalAgendaView(APIView):
@@ -758,6 +1021,23 @@ class StripeWebhookView(APIView):
                             charge_id=data_object.get("latest_charge", "") or data_object.get("id", ""),
                             payload=data_object,
                         )
+                    elif event_type == "payment_intent.payment_failed":
+                        booking.payment_status = Booking.PaymentStatus.PAYMENT_REQUIRED
+                        booking.provider_payment_intent_id = data_object.get("id", "") or booking.provider_payment_intent_id
+                        booking.save(
+                            update_fields=[
+                                "payment_status",
+                                "provider_payment_intent_id",
+                                "updated_at",
+                            ]
+                        )
+                        latest_payment = booking.payments.order_by("-created_at").first()
+                        if latest_payment:
+                            latest_payment.status = BookingPayment.Status.FAILED
+                            latest_payment.raw_provider_payload = data_object
+                            latest_payment.save(
+                                update_fields=["status", "raw_provider_payload", "updated_at"]
+                            )
                     elif event_type in {"charge.refunded", "refund.updated"} and booking.amount_received_eur > Decimal("0.00"):
                         refund_amount_cents = data_object.get("amount_refunded")
                         refund_amount = (
@@ -801,6 +1081,16 @@ class StripeWebhookView(APIView):
                                 recorded_by_role=Booking.ActorRole.SYSTEM,
                                 raw_provider_payload=data_object,
                             )
+                    elif event_type == "transfer.failed":
+                        booking.payout_status = Booking.PayoutStatus.PAYOUT_BLOCKED
+                        booking.payout_blocked_reason = "Le versement Stripe a échoué et nécessite une reprise manuelle."
+                        booking.save(
+                            update_fields=[
+                                "payout_status",
+                                "payout_blocked_reason",
+                                "updated_at",
+                            ]
+                        )
                     elif event_type == "transfer.created" and not booking.provider_transfer_id:
                         booking.provider_transfer_id = data_object.get("id", "")
                         booking.provider_payout_id = data_object.get("destination_payment", "") or booking.provider_payout_id

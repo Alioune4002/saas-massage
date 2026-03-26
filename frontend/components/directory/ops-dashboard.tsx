@@ -9,12 +9,18 @@ import {
   createAdminImportedProfile,
   createAdminSource,
   createContactCampaign,
+  getAdminAcquisitionCoverage,
+  getAdminAcquisitionSuggestions,
+  getAdminContactCampaigns,
   getAdminImportedProfiles,
   getAdminImportJobs,
   getAdminSources,
   getRemovalRequests,
   runAdminSourceImport,
   sendContactCampaign,
+  type CityCoverageMetric,
+  type ContactCampaignRecord,
+  type DirectoryInterestLeadRecord,
   type ImportedProfileRecord,
   type RemovalRequestRecord,
   type SourceImportJobRecord,
@@ -33,6 +39,9 @@ export function OpsDashboard() {
   const [jobs, setJobs] = useState<SourceImportJobRecord[]>([]);
   const [profiles, setProfiles] = useState<ImportedProfileRecord[]>([]);
   const [removals, setRemovals] = useState<RemovalRequestRecord[]>([]);
+  const [coverage, setCoverage] = useState<CityCoverageMetric[]>([]);
+  const [suggestions, setSuggestions] = useState<DirectoryInterestLeadRecord[]>([]);
+  const [campaigns, setCampaigns] = useState<ContactCampaignRecord[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [pageError, setPageError] = useState("");
   const [pageSuccess, setPageSuccess] = useState("");
@@ -54,11 +63,22 @@ export function OpsDashboard() {
     async function load() {
       try {
         setLoadingData(true);
-        const [sourcesData, jobsData, profilesData, removalsData] = await Promise.all([
+        const [
+          sourcesData,
+          jobsData,
+          profilesData,
+          removalsData,
+          coverageData,
+          suggestionsData,
+          campaignsData,
+        ] = await Promise.all([
           getAdminSources(),
           getAdminImportJobs(),
           getAdminImportedProfiles({ import_status: currentStatusFilter }),
           getRemovalRequests(),
+          getAdminAcquisitionCoverage(),
+          getAdminAcquisitionSuggestions({ processed: false }),
+          getAdminContactCampaigns(),
         ]);
         if (!active) {
           return;
@@ -67,6 +87,9 @@ export function OpsDashboard() {
         setJobs(jobsData);
         setProfiles(profilesData);
         setRemovals(removalsData);
+        setCoverage(coverageData);
+        setSuggestions(suggestionsData);
+        setCampaigns(campaignsData);
         setImportSourceId((current) => current || sourcesData[0]?.id || "");
         setPageError("");
       } catch (err) {
@@ -172,6 +195,8 @@ export function OpsDashboard() {
       setPageError("");
       const refreshedProfiles = await getAdminImportedProfiles({ import_status: currentStatusFilter });
       setProfiles(refreshedProfiles);
+      const refreshedCoverage = await getAdminAcquisitionCoverage();
+      setCoverage(refreshedCoverage);
       event.currentTarget.reset();
     } catch (err) {
       setPageError(err instanceof Error ? err.message : "Création impossible.");
@@ -197,6 +222,8 @@ export function OpsDashboard() {
       setPageError("");
       const refreshedProfiles = await getAdminImportedProfiles({ import_status: currentStatusFilter });
       setProfiles(refreshedProfiles);
+      const refreshedCoverage = await getAdminAcquisitionCoverage();
+      setCoverage(refreshedCoverage);
     } catch (err) {
       setPageError(err instanceof Error ? err.message : "Action bulk impossible.");
     }
@@ -214,6 +241,8 @@ export function OpsDashboard() {
       const result = await sendContactCampaign(campaign.id);
       setPageSuccess(`Campagne envoyée: ${result.sent} emails, ${result.failed} échecs.`);
       setPageError("");
+      const refreshedCampaigns = await getAdminContactCampaigns();
+      setCampaigns(refreshedCampaigns);
     } catch (err) {
       setPageError(err instanceof Error ? err.message : "Campagne impossible.");
     }
@@ -263,6 +292,46 @@ export function OpsDashboard() {
             <p className="mt-2 text-3xl font-semibold text-[var(--foreground)]">{value}</p>
           </Card>
         ))}
+      </section>
+
+      <section className="mt-6 grid gap-6 xl:grid-cols-2">
+        <Card className="rounded-[1.8rem] p-6">
+          <h2 className="text-2xl font-semibold text-[var(--foreground)]">Couverture géographique</h2>
+          <div className="mt-5 space-y-3">
+            {coverage.slice(0, 8).map((item) => (
+              <div key={item.city} className="rounded-[1.4rem] border border-[var(--border)] bg-[var(--background-soft)] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-[var(--foreground)]">{item.city}</p>
+                    <p className="text-sm text-[var(--foreground-muted)]">
+                      {item.total_profiles} profils · {item.claimed_profiles} revendiqués · {item.unclaimed_profiles} non revendiqués
+                    </p>
+                  </div>
+                  <p className="text-xs text-[var(--foreground-subtle)]">{item.coverage_stage}</p>
+                </div>
+                <p className="mt-2 text-sm text-[var(--foreground-muted)]">{item.recommended_action}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="rounded-[1.8rem] p-6">
+          <h2 className="text-2xl font-semibold text-[var(--foreground)]">Suggestions d’acquisition</h2>
+          <div className="mt-5 space-y-3">
+            {suggestions.slice(0, 8).map((item) => (
+              <div key={item.id} className="rounded-[1.4rem] border border-[var(--border)] bg-[var(--background-soft)] p-4">
+                <p className="font-medium text-[var(--foreground)]">{item.kind_label}</p>
+                <p className="mt-1 text-sm text-[var(--foreground-muted)]">
+                  {item.full_name} · {item.email}
+                </p>
+                <p className="mt-1 text-sm text-[var(--foreground-muted)]">
+                  {item.city || "Ville non précisée"}
+                  {item.practitioner_name ? ` · ${item.practitioner_name}` : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Card>
       </section>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-2">
@@ -432,6 +501,14 @@ export function OpsDashboard() {
             </Button>
           </div>
           <div className="mt-5 space-y-3">
+            {campaigns.slice(0, 4).map((campaign) => (
+              <div key={campaign.id} className="rounded-[1.4rem] border border-[var(--border)] bg-[var(--background-soft)] p-4">
+                <p className="font-medium text-[var(--foreground)]">{campaign.name}</p>
+                <p className="text-sm text-[var(--foreground-muted)]">
+                  {campaign.status} · {campaign.total_sent} envoyés · {campaign.total_failed} échecs
+                </p>
+              </div>
+            ))}
             {removals.slice(0, 6).map((request) => (
               <div key={request.id} className="rounded-[1.4rem] border border-[var(--border)] bg-[var(--background-soft)] p-4">
                 <p className="font-medium text-[var(--foreground)]">{request.requester_email}</p>

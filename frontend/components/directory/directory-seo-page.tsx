@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { SiteHeader } from "@/components/marketing/site-header";
 import { DirectoryListingGrid } from "@/components/directory/directory-listing-grid";
+import { LocationAutosuggest } from "@/components/directory/location-autosuggest";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -67,12 +68,25 @@ export function DirectorySeoPage({ config }: DirectorySeoPageProps) {
             <Badge tone="info">
               {config.kind === "city" ? "Page ville" : "Page catégorie"}
             </Badge>
+            <div className="mt-4 text-sm text-[var(--foreground-subtle)]">
+              <Link href="/annuaire" className="underline-offset-2 hover:underline">
+                Annuaire
+              </Link>
+              <span className="mx-2">/</span>
+              <span>{config.h1}</span>
+            </div>
             <h1 className="mt-5 text-4xl font-semibold tracking-tight text-[var(--foreground)] md:text-5xl">
               {config.h1}
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--foreground-muted)] md:text-lg">
               {config.description}
             </p>
+            <div className="mt-6 max-w-xl">
+              <LocationAutosuggest
+                defaultValue={config.city || ""}
+                hint="Explorer une autre ville ou zone"
+              />
+            </div>
           </Card>
 
           <Card className="rounded-[2rem]">

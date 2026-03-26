@@ -4,9 +4,11 @@ from django.core.validators import RegexValidator
 from django.db import models
 from django.core.validators import MinValueValidator
 from django.utils import timezone
+from django.utils.text import slugify
 from pathlib import Path
 from uuid import uuid4
 from decimal import Decimal
+import unicodedata
 
 from common.models import TimeStampedUUIDModel
 
@@ -35,6 +37,12 @@ RESERVED_PUBLIC_SLUGS = {
 def validate_public_slug(value: str):
     if value in RESERVED_PUBLIC_SLUGS:
         raise ValidationError("Ce lien public n'est pas disponible.")
+
+
+def normalize_searchable_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
+    return " ".join(ascii_value.lower().split())
 
 
 def build_professional_media_path(instance, folder: str, filename: str) -> str:
@@ -260,6 +268,9 @@ class ProfessionalProfile(TimeStampedUUIDModel):
 
     def clean(self):
         super().clean()
+        max_deposit_percentage = Decimal(
+            str(getattr(settings, "NUADYX_MAX_DEPOSIT_PERCENTAGE", "50.00"))
+        )
 
         if self.reservation_payment_mode == self.ReservationPaymentMode.DEPOSIT:
             if self.deposit_value <= Decimal("0.00"):
@@ -273,6 +284,18 @@ class ProfessionalProfile(TimeStampedUUIDModel):
                 raise ValidationError(
                     {"deposit_value": "Le pourcentage d'acompte ne peut pas dépasser 100 %."}
                 )
+            if (
+                self.deposit_value_type == self.DepositValueType.PERCENTAGE
+                and self.deposit_value > max_deposit_percentage
+            ):
+                raise ValidationError(
+                    {
+                        "deposit_value": (
+                            f"Le pourcentage d'acompte ne peut pas dépasser {max_deposit_percentage} % "
+                            "sans validation supplémentaire."
+                        )
+                    }
+                )
         elif self.deposit_value and self.deposit_value != Decimal("0.00"):
             raise ValidationError(
                 {
@@ -281,6 +304,256 @@ class ProfessionalProfile(TimeStampedUUIDModel):
             )
 
     def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class GuestFavoriteCollection(TimeStampedUUIDModel):
+    email = models.EmailField("email", blank=True)
+    access_token = models.CharField("jeton d'accès", max_length=64, unique=True, editable=False)
+    is_active = models.BooleanField("actif", default=True)
+    last_accessed_at = models.DateTimeField("dernier accès", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "collection de favoris invité"
+        verbose_name_plural = "collections de favoris invité"
+        ordering = ("-updated_at",)
+
+    def __str__(self) -> str:
+        return self.email or f"Invité {self.pk}"
+
+    def save(self, *args, **kwargs):
+        if not self.access_token:
+            self.access_token = uuid4().hex
+        return super().save(*args, **kwargs)
+
+
+class FavoritePractitioner(TimeStampedUUIDModel):
+    collection = models.ForeignKey(
+        GuestFavoriteCollection,
+        on_delete=models.CASCADE,
+        related_name="favorites",
+    )
+    professional = models.ForeignKey(
+        ProfessionalProfile,
+        on_delete=models.CASCADE,
+        related_name="favorited_by",
+    )
+
+    class Meta:
+        verbose_name = "praticien favori"
+        verbose_name_plural = "praticiens favoris"
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("collection", "professional"),
+                name="unique_favorite_professional_per_collection",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.collection_id} → {self.professional.business_name}"
+
+
+class ContactTag(TimeStampedUUIDModel):
+    professional = models.ForeignKey(
+        ProfessionalProfile,
+        on_delete=models.CASCADE,
+        related_name="contact_tags",
+    )
+    label = models.CharField("libellé", max_length=40)
+    normalized_label = models.CharField("libellé normalisé", max_length=40, editable=False)
+
+    class Meta:
+        verbose_name = "tag contact"
+        verbose_name_plural = "tags contacts"
+        ordering = ("label",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("professional", "normalized_label"),
+                name="unique_contact_tag_per_professional",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return self.label
+
+    def save(self, *args, **kwargs):
+        self.normalized_label = slugify(self.label or "").replace("-", "")
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class PractitionerContact(TimeStampedUUIDModel):
+    class Segment(models.TextChoices):
+        NEW = "new", "Nouveau"
+        ACTIVE = "active", "Actif"
+        LOYAL = "loyal", "Fidèle"
+        NEVER_SEEN = "never_seen", "Jamais vu"
+        CANCELED = "canceled", "A annulé"
+        NO_SHOW = "no_show", "No-show"
+        WATCH = "watch", "À surveiller"
+        DISPUTE = "dispute", "Avec litige"
+        BLOCKED = "blocked", "Bloqué"
+        INACTIVE = "inactive", "Inactif"
+
+    class RiskLevel(models.TextChoices):
+        NONE = "none", "Aucun"
+        LOW = "low", "Faible"
+        MEDIUM = "medium", "Moyen"
+        HIGH = "high", "Élevé"
+        BLOCKED = "blocked", "Bloqué"
+
+    professional = models.ForeignKey(
+        ProfessionalProfile,
+        on_delete=models.CASCADE,
+        related_name="contacts",
+    )
+    first_name = models.CharField("prénom", max_length=120, blank=True)
+    last_name = models.CharField("nom", max_length=120, blank=True)
+    email = models.EmailField("email")
+    normalized_email = models.CharField("email normalisé", max_length=255, editable=False)
+    phone = models.CharField("téléphone", max_length=30, blank=True)
+    booking_count = models.PositiveIntegerField("nombre de réservations", default=0)
+    validated_booking_count = models.PositiveIntegerField("prestations validées", default=0)
+    canceled_booking_count = models.PositiveIntegerField("annulations", default=0)
+    no_show_count = models.PositiveIntegerField("no-show", default=0)
+    disputed_booking_count = models.PositiveIntegerField("litiges", default=0)
+    first_booking_at = models.DateTimeField("première réservation", null=True, blank=True)
+    last_booking_at = models.DateTimeField("dernière réservation", null=True, blank=True)
+    last_validated_at = models.DateTimeField("dernière prestation validée", null=True, blank=True)
+    segment = models.CharField(
+        "segment principal",
+        max_length=20,
+        choices=Segment.choices,
+        default=Segment.NEW,
+    )
+    segment_score = models.IntegerField("score de segment", default=0)
+    segment_reasons_json = models.JSONField("raisons du segment", default=list, blank=True)
+    risk_level = models.CharField(
+        "niveau de risque",
+        max_length=20,
+        choices=RiskLevel.choices,
+        default=RiskLevel.NONE,
+    )
+    is_trusted = models.BooleanField("client de confiance", default=False)
+    tags = models.ManyToManyField(ContactTag, related_name="contacts", blank=True)
+
+    class Meta:
+        verbose_name = "contact praticien"
+        verbose_name_plural = "contacts praticiens"
+        ordering = ("first_name", "last_name", "email")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("professional", "normalized_email"),
+                name="unique_practitioner_contact_email",
+            )
+        ]
+        indexes = [
+            models.Index(fields=("professional", "segment")),
+            models.Index(fields=("professional", "risk_level")),
+            models.Index(fields=("professional", "last_booking_at")),
+        ]
+
+    def __str__(self) -> str:
+        full_name = f"{self.first_name} {self.last_name}".strip()
+        return full_name or self.email
+
+    @property
+    def display_name(self) -> str:
+        return f"{self.first_name} {self.last_name}".strip() or self.email
+
+    def save(self, *args, **kwargs):
+        self.normalized_email = (self.email or "").strip().lower()
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class ContactPrivateNote(TimeStampedUUIDModel):
+    contact = models.OneToOneField(
+        PractitionerContact,
+        on_delete=models.CASCADE,
+        related_name="private_note",
+    )
+    content = models.TextField("note privée", max_length=600, blank=True)
+
+    class Meta:
+        verbose_name = "note privée contact"
+        verbose_name_plural = "notes privées contacts"
+
+    def __str__(self) -> str:
+        return f"Note {self.contact.display_name}"
+
+
+class LocationIndex(TimeStampedUUIDModel):
+    class LocationType(models.TextChoices):
+        CITY = "city", "Ville"
+        POSTAL_CODE = "postal_code", "Code postal"
+        DEPARTMENT = "department", "Département"
+        REGION = "region", "Région"
+        COUNTRY = "country", "Pays"
+
+    location_type = models.CharField(
+        "type de localisation",
+        max_length=20,
+        choices=LocationType.choices,
+    )
+    label = models.CharField("libellé", max_length=160)
+    normalized_label = models.CharField("libellé normalisé", max_length=160, editable=False)
+    slug = models.SlugField("slug", max_length=170)
+    city = models.CharField("ville", max_length=120, blank=True)
+    postal_code = models.CharField("code postal", max_length=20, blank=True)
+    insee_code = models.CharField("code INSEE", max_length=10, blank=True)
+    department_code = models.CharField("code département", max_length=10, blank=True)
+    department_name = models.CharField("département", max_length=120, blank=True)
+    region_code = models.CharField("code région", max_length=10, blank=True)
+    region = models.CharField("région", max_length=120, blank=True)
+    country = models.CharField("pays", max_length=120, default="France", blank=True)
+    search_text = models.TextField("texte de recherche", blank=True, editable=False)
+    priority = models.PositiveIntegerField("priorité", default=0)
+    is_active = models.BooleanField("actif", default=True)
+
+    class Meta:
+        verbose_name = "index de localisation"
+        verbose_name_plural = "index de localisation"
+        ordering = ("-priority", "label")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("location_type", "slug", "postal_code"),
+                name="unique_location_index_entry",
+            )
+        ]
+        indexes = [
+            models.Index(fields=("normalized_label",)),
+            models.Index(fields=("location_type", "priority")),
+            models.Index(fields=("postal_code",)),
+            models.Index(fields=("department_code",)),
+            models.Index(fields=("region_code",)),
+        ]
+
+    def __str__(self) -> str:
+        return self.label
+
+    def save(self, *args, **kwargs):
+        self.normalized_label = normalize_searchable_text(self.label)
+        if not self.slug:
+            self.slug = slugify(self.city or self.label or uuid4().hex[:12])
+        search_parts = [
+            self.label,
+            self.city,
+            self.postal_code,
+            self.insee_code,
+            self.department_code,
+            self.department_name,
+            self.region_code,
+            self.region,
+            self.country,
+        ]
+        self.search_text = " ".join(
+            part
+            for part in (normalize_searchable_text(value) for value in search_parts)
+            if part
+        )
         self.full_clean()
         return super().save(*args, **kwargs)
 

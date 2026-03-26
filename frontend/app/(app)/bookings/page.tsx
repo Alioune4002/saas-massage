@@ -298,6 +298,14 @@ export default function BookingsPage() {
                       <p className="text-sm leading-6 text-[var(--foreground-muted)]">
                         {booking.service_title} · {formatDateTimeLong(booking.start_at)}
                       </p>
+                      {booking.client_note ? (
+                        <p className="rounded-[1rem] border border-[var(--border)] bg-[var(--background-soft)] px-3 py-3 text-sm leading-6 text-[var(--foreground-muted)]">
+                          <span className="font-medium text-[var(--foreground)]">
+                            Note client :
+                          </span>{" "}
+                          {booking.client_note}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="flex flex-wrap gap-2">
