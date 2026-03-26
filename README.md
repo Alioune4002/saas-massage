@@ -338,6 +338,20 @@ Il sert déjà à :
 - donner un retour lisible au praticien dans son espace profil public
 - préparer les futures logiques de visibilité / mise en avant sans promesse trompeuse
 
+## Assistant virtuel praticien
+
+L’assistant est désormais positionné comme un outil de conversion et de réassurance pour les praticiens solo.
+
+Objectif actuel :
+- répondre aux questions fréquentes quand le praticien est indisponible
+- donner les informations pratiques utiles avant une réservation
+- aider à convertir un visiteur intéressé en futur client
+
+Important :
+- l’assistant doit être `activé`
+- et l’option `afficher sur mon profil public` doit aussi être activée
+- sinon il reste privé dans l’espace praticien et n’apparaît pas sur la page publique
+
 ## Qualité et vérifications
 
 Commandes utiles :

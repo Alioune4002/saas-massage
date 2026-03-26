@@ -602,7 +602,7 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
   const faqItems = draft.faqItems.slice(0, 4);
 
   return (
-    <main className="min-h-screen px-4 py-4 md:px-6">
+    <main className="min-h-screen overflow-x-clip px-4 py-4 md:px-6">
       <div className="mx-auto max-w-7xl space-y-4">
         {previewMode ? (
           <Notice tone="info">
@@ -613,8 +613,8 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
         ) : null}
 
         <header className="glass-panel rounded-[1.8rem] px-4 py-3 md:px-5">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-4">
               <Link href="/">
                 <NuadyxLogo priority />
               </Link>
@@ -622,7 +622,7 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
                 Profil réservable 24h/24
               </Badge>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 self-end sm:self-auto">
               <ThemeToggle compact />
               <Link href="/login">
                 <Button variant="secondary" size="md">
@@ -645,7 +645,7 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
           ) : null}
           <div className="absolute inset-0 bg-[linear-gradient(180deg,var(--hero-scrim),var(--hero-scrim-strong))]" />
           <div className="relative grid gap-6 px-5 py-6 md:px-8 md:py-8 lg:grid-cols-[1.08fr_0.92fr] lg:items-end">
-            <div className="text-[var(--inverse-foreground)]">
+            <div className="min-w-0 text-[var(--inverse-foreground)]">
               <div className="flex flex-wrap gap-2">
                 <Badge className={theme.accentBadgeClassName}>
                   {draft.acceptsOnlineBooking
@@ -655,6 +655,11 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
                 <Badge className={theme.accentBadgeClassName}>
                   {getPracticeModeLead(draft)}
                 </Badge>
+                {assistant ? (
+                  <Badge className={theme.accentBadgeClassName}>
+                    Assistant virtuel disponible
+                  </Badge>
+                ) : null}
                 {profile.verification_badge ? (
                   <Badge className={theme.accentBadgeClassName}>
                     {profile.verification_badge.label}
@@ -672,21 +677,21 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
               <p className="mt-4 max-w-3xl text-lg leading-8 text-[var(--inverse-foreground-muted)]">
                 {draft.headline}
               </p>
-              <div className="mt-5 flex flex-wrap items-center gap-4 text-sm text-[var(--inverse-foreground-muted)]">
-                <span className="inline-flex items-center gap-2">
+              <div className="mt-5 flex flex-wrap items-start gap-3 text-sm text-[var(--inverse-foreground-muted)]">
+                <span className="inline-flex min-w-0 max-w-full items-start gap-2 break-words">
                   <MapPin className="h-4 w-4" />
-                  {draft.serviceArea || draft.city}
+                  <span className="min-w-0 break-words">{draft.serviceArea || draft.city}</span>
                 </span>
                 {profile.phone ? (
-                  <span className="inline-flex items-center gap-2">
+                  <span className="inline-flex min-w-0 max-w-full items-start gap-2 break-words">
                     <Phone className="h-4 w-4" />
-                    {profile.phone}
+                    <span className="min-w-0 break-all">{profile.phone}</span>
                   </span>
                 ) : null}
                 {profile.public_email ? (
-                  <span className="inline-flex items-center gap-2">
+                  <span className="inline-flex min-w-0 max-w-full items-start gap-2 break-words">
                     <Mail className="h-4 w-4" />
-                    {profile.public_email}
+                    <span className="min-w-0 break-all">{profile.public_email}</span>
                   </span>
                 ) : null}
               </div>
@@ -736,7 +741,7 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
               ) : null}
             </div>
 
-            <div className="relative flex justify-start lg:justify-end">
+            <div className="relative min-w-0 flex justify-start lg:justify-end">
               <div className="relative w-full max-w-md rounded-[2rem] border border-[var(--hero-card-border-soft)] bg-[var(--hero-card-surface)] p-5 backdrop-blur-sm">
                 <div className="flex items-start gap-4">
                   <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.8rem] border border-[var(--hero-card-border)] bg-[var(--hero-card-surface-strong)] text-3xl font-semibold text-[var(--inverse-foreground)]">
@@ -809,7 +814,7 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
         </section>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.06fr_0.94fr]">
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
             <Card className="rounded-[2rem]">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -1112,7 +1117,7 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
             </Card>
           </div>
 
-          <div className="space-y-6 lg:sticky lg:top-5 lg:self-start" id="reservation">
+          <div className="min-w-0 space-y-6 lg:sticky lg:top-5 lg:self-start" id="reservation">
             <Card className="rounded-[2rem]">
               <div className="flex items-center gap-3">
                 <CalendarClock className="h-5 w-5 text-[var(--primary)]" />
@@ -1129,6 +1134,11 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
                 Choisissez votre prestation, un créneau encore disponible, puis
                 transmettez vos informations en quelques étapes claires.
               </p>
+              {assistant ? (
+                <div className="mt-4 rounded-[1.35rem] border border-[var(--border)] bg-[var(--background-soft)] px-4 py-4 text-sm leading-6 text-[var(--foreground-muted)]">
+                  Un assistant virtuel peut aussi répondre aux questions fréquentes sur les soins, la préparation et la réservation quand le praticien n’est pas immédiatement disponible.
+                </div>
+              ) : null}
               {paymentProcessing ? (
                 <Notice tone="info" className="mt-4">
                   Votre règlement est en cours de confirmation par le prestataire

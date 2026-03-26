@@ -16,9 +16,11 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SwitchRow } from "@/components/ui/switch-row";
 import {
+  getAssistantProfile,
   getDashboardProfile,
   getServices,
   updateDashboardProfile,
+  type AssistantProfile,
   type DashboardProfile,
   type PublicService,
 } from "@/lib/api";
@@ -36,6 +38,7 @@ import {
 
 export default function PublicProfileSettingsPage() {
   const [profile, setProfile] = useState<DashboardProfile | null>(null);
+  const [assistantProfile, setAssistantProfile] = useState<AssistantProfile | null>(null);
   const [services, setServices] = useState<PublicService[]>([]);
   const [draft, setDraft] = useState<PublicProfileDraft | null>(null);
   const [defaultDraft, setDefaultDraft] = useState<PublicProfileDraft | null>(null);
@@ -52,8 +55,9 @@ export default function PublicProfileSettingsPage() {
     async function load() {
       try {
         setLoading(true);
-        const [profileData, servicesData] = await Promise.all([
+        const [profileData, assistantData, servicesData] = await Promise.all([
           getDashboardProfile(),
+          getAssistantProfile(),
           getServices(),
         ]);
 
@@ -78,6 +82,7 @@ export default function PublicProfileSettingsPage() {
           publicServices
         );
         setProfile(profileData);
+        setAssistantProfile(assistantData);
         setServices(publicServices);
         setDefaultDraft(defaultDraft);
         setDraft(defaultDraft);
@@ -1158,20 +1163,28 @@ export default function PublicProfileSettingsPage() {
 
           <Card>
             <CardHeader
-              title="Préparation de l’assistant"
-              subtitle="Prépare l’emplacement de l’assistant public sans promettre plus que ce qui est déjà actif."
+              title="Assistant virtuel sur ma page"
+              subtitle="Vérifie ici si l’assistant est réellement prêt à aider les visiteurs pendant tes indisponibilités."
             />
             <div className="mt-5 rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface-muted)] p-5">
               <div className="flex items-start gap-3">
                 <Sparkles className="mt-0.5 h-5 w-5 text-[var(--primary)]" />
                 <div>
                   <p className="text-sm font-medium text-[var(--foreground)]">
-                    Futur assistant du praticien
+                    {assistantProfile?.assistant_enabled &&
+                    assistantProfile?.public_assistant_enabled
+                      ? "Assistant visible sur la page publique"
+                      : assistantProfile?.assistant_enabled
+                        ? "Assistant prêt mais pas encore public"
+                        : "Assistant non activé"}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-[var(--foreground-muted)]">
-                    Il pourra répondre aux questions sur les prestations, la
-                    préparation, les disponibilités et le cadre d’accueil à partir
-                    des contenus fournis par le praticien.
+                    {assistantProfile?.assistant_enabled &&
+                    assistantProfile?.public_assistant_enabled
+                      ? "Les visiteurs peuvent déjà poser des questions sur les prestations, la préparation, la réservation et le cadre d’accueil directement depuis votre page."
+                      : assistantProfile?.assistant_enabled
+                        ? "Votre assistant est enregistré, mais il ne sera visible côté client qu’après activation de l’option d’affichage public."
+                        : "Activez et préparez votre assistant pour qu’il puisse répondre aux questions fréquentes, donner des infos pratiques et aider à convertir les visiteurs sérieux."}
                   </p>
                 </div>
               </div>
@@ -1181,6 +1194,11 @@ export default function PublicProfileSettingsPage() {
               <Button size="lg" onClick={handleSaveDraft} disabled={saving}>
                 {saving ? "Enregistrement..." : "Enregistrer mon profil public"}
               </Button>
+              <Link href="/assistant">
+                <Button variant="secondary" size="lg">
+                  Configurer mon assistant
+                </Button>
+              </Link>
               <Button variant="secondary" size="lg" onClick={handleResetDraft}>
                 Réinitialiser
               </Button>

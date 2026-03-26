@@ -55,10 +55,10 @@ export function NuadyxLogo({
 
       {showText ? (
         <div className={cn("min-w-0", textClassName)}>
-          <div className="truncate text-[0.72rem] uppercase tracking-[0.22em] text-[var(--primary)]/90 sm:tracking-[0.34em]">
+          <div className="max-w-[8.75rem] text-[0.56rem] uppercase leading-[1.25] tracking-[0.12em] text-[var(--primary)]/90 sm:max-w-none sm:text-[0.72rem] sm:tracking-[0.28em]">
             Annuaire massage & bien-être
           </div>
-          <div className="truncate text-base font-semibold tracking-[0.18em] text-[var(--foreground)] sm:text-lg sm:tracking-[0.28em]">
+          <div className="max-w-[8.75rem] truncate text-sm font-semibold tracking-[0.14em] text-[var(--foreground)] sm:max-w-none sm:text-lg sm:tracking-[0.28em]">
             NUADYX
           </div>
         </div>

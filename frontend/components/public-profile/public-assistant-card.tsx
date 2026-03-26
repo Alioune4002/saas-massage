@@ -25,9 +25,9 @@ export function PublicAssistantCard({
 }: PublicAssistantCardProps) {
   return (
     <AssistantConversationCard
-      title="Assistant du praticien"
-      subtitle="Posez une question sur les prestations, la réservation ou le déroulé d’une séance."
-      badgeLabel="Réponse automatique"
+      title="Assistant virtuel du praticien"
+      subtitle="Même quand le praticien est indisponible, cet assistant peut répondre aux questions fréquentes, donner les infos pratiques utiles et vous aider à réserver plus sereinement."
+      badgeLabel="Disponible 24h/24"
       question={question}
       answer={reply.answer}
       suggestions={assistant.starter_questions}
@@ -35,7 +35,7 @@ export function PublicAssistantCard({
       loading={loading}
       error={error}
       cautious={reply.cautious}
-      submitLabel="Poser ma question"
+      submitLabel="Obtenir une réponse"
       onQuestionChange={onQuestionChange}
       onSubmit={onSubmit}
     />

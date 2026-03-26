@@ -179,7 +179,7 @@ export default function AssistantPage() {
       <SectionHeading
         eyebrow="Mon assistant"
         title="Répondre automatiquement aux questions courantes"
-        description="Prépare un assistant virtuel crédible, prudent et fidèle à ta manière d’accueillir. Il pourra répondre aux questions clients quand tu es déjà en séance."
+        description="Prépare un assistant virtuel crédible, prudent et fidèle à ta manière d’accueillir. Il pourra répondre aux questions clients pendant tes indisponibilités, rassurer les visiteurs et aider à convertir les demandes sérieuses."
         action={
           <Button
             size="lg"
@@ -200,13 +200,13 @@ export default function AssistantPage() {
           <Card>
             <CardHeader
               title="Activation et message d’accueil"
-              subtitle="Décide si ton assistant peut répondre, puis prépare le premier message que verront tes clients."
+              subtitle="Décide si ton assistant peut répondre, puis prépare le premier message que verront tes visiteurs sur ta page publique."
             />
 
             <div className="mt-6 space-y-4">
               <SwitchRow
                 label="Activer l’assistant"
-                description="Autoriser NUADYX à répondre automatiquement aux questions courantes à partir des informations enregistrées."
+                description="Autoriser NUADYX à répondre automatiquement aux questions courantes à partir des informations enregistrées, même quand tu es déjà en séance."
                 checked={draft.assistant_enabled}
                 onCheckedChange={(checked) =>
                   setDraft((current) =>
@@ -216,7 +216,7 @@ export default function AssistantPage() {
               />
               <SwitchRow
                 label="Afficher l’assistant sur mon profil public"
-                description="Rendre le widget visible sur ta page publique quand tu seras prêt à le montrer à tes clients."
+                description="Rendre le widget visible sur ta page publique pour informer, rassurer et convertir les visiteurs intéressés."
                 checked={draft.public_assistant_enabled}
                 onCheckedChange={(checked) =>
                   setDraft((current) =>

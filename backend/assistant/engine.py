@@ -87,7 +87,7 @@ def get_public_slots(professional: ProfessionalProfile) -> QuerySet[Availability
         .filter(
             professional=professional,
             is_active=True,
-            booking__isnull=True,
+            bookings__isnull=True,
             start_at__gte=timezone.now(),
         )
         .order_by("start_at")

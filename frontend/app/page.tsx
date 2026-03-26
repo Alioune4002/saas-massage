@@ -301,7 +301,7 @@ export default function HomePage() {
 
           <Card className="rounded-[1.9rem]">
             <p className="text-xs uppercase tracking-[0.32em] text-[var(--primary)]/80">
-              Assistant
+              Assistant virtuel
             </p>
             <div className="mt-4 flex items-start gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] text-[var(--primary)]">
@@ -309,19 +309,22 @@ export default function HomePage() {
               </div>
               <div>
                 <h2 className="text-3xl font-semibold text-[var(--foreground)]">
-                  Un assistant pour répondre à vos clients
+                  Répondre même quand vous n’êtes pas disponible
                 </h2>
                 <p className="mt-3 text-sm leading-7 text-[var(--foreground-muted)]">
-                  NUADYX peut répondre aux questions fréquentes de vos clients à votre place,
-                  même lorsque vous êtes en séance.
+                  Vous travaillez seul et vous n’avez pas d’assistant pour répondre
+                  toute la journée ? Depuis votre espace, vous pouvez préparer un
+                  assistant virtuel qui répond aux questions fréquentes, donne les
+                  informations pratiques utiles et aide les visiteurs à passer du
+                  simple intérêt à la réservation.
                 </p>
               </div>
             </div>
             <div className="mt-6 space-y-3">
               {[
                 "Comment se déroule une séance ?",
-                "Que faut-il prévoir ?",
-                "Puis-je déplacer mon rendez-vous ?",
+                "Que faut-il prévoir avant de venir ?",
+                "Comment réserver ou déplacer un rendez-vous ?",
               ].map((question) => (
                 <div
                   key={question}
@@ -332,7 +335,8 @@ export default function HomePage() {
               ))}
             </div>
             <p className="mt-4 text-sm leading-7 text-[var(--foreground-muted)]">
-              Vous restez concentré sur votre pratique, sans perdre en qualité de réponse.
+              Vous restez concentré sur vos séances, pendant que votre page continue
+              à rassurer, informer et convertir les visiteurs intéressés.
             </p>
           </Card>
         </div>
