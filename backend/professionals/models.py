@@ -158,6 +158,9 @@ class ProfessionalProfile(TimeStampedUUIDModel):
         default=PracticeMode.STUDIO,
     )
     city = models.CharField("ville", max_length=120, blank=True)
+    postal_code = models.CharField("code postal", max_length=20, blank=True)
+    department_code = models.CharField("code département", max_length=10, blank=True)
+    region = models.CharField("région", max_length=120, blank=True)
     service_area = models.CharField("zone desservie", max_length=180, blank=True)
     venue_details = models.TextField("lieu d'accueil", blank=True)
     access_details = models.TextField("accès et repères", blank=True)
@@ -874,19 +877,72 @@ class DirectoryInterestLead(TimeStampedUUIDModel):
         RECOMMEND_MY_MASSAGE_THERAPIST = "recommend_masseur", "Recommander mon masseur"
         CITY_WAITLIST = "city_waitlist", "Prévenu à l'ouverture"
 
+    class LocationType(models.TextChoices):
+        CITY = "city", "Ville"
+        DEPARTMENT = "department", "Département"
+        REGION = "region", "Région"
+        POSTAL_CODE = "postal_code", "Code postal"
+
+    class OpsStatus(models.TextChoices):
+        NEW = "new", "Nouveau"
+        IN_REVIEW = "in_review", "En revue"
+        CONVERTED = "converted", "Converti"
+        IGNORED = "ignored", "Ignoré"
+        CONTACTED = "contacted", "Contacté"
+
     kind = models.CharField("type de demande", max_length=40, choices=Kind.choices)
     full_name = models.CharField("nom", max_length=160)
     email = models.EmailField("email")
     city = models.CharField("ville", max_length=120, blank=True)
+    city_slug = models.SlugField("slug ville", max_length=140, blank=True)
+    location_type = models.CharField(
+        "type de localisation",
+        max_length=20,
+        choices=LocationType.choices,
+        default=LocationType.CITY,
+    )
     practitioner_name = models.CharField("praticien suggéré", max_length=160, blank=True)
     message = models.TextField("message", blank=True)
     source_page = models.CharField("page source", max_length=200, blank=True)
+    ops_status = models.CharField(
+        "statut ops",
+        max_length=20,
+        choices=OpsStatus.choices,
+        default=OpsStatus.NEW,
+    )
+    converted_to_imported_profile = models.ForeignKey(
+        "directory.ImportedProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="origin_interest_leads",
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_directory_interest_leads",
+    )
+    ops_notes = models.TextField("notes ops", blank=True)
     processed = models.BooleanField("traité", default=False)
 
     class Meta:
         verbose_name = "lead annuaire"
         verbose_name_plural = "leads annuaire"
         ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("city_slug",)),
+            models.Index(fields=("ops_status",)),
+            models.Index(fields=("processed",)),
+        ]
 
     def __str__(self) -> str:
         return f"{self.get_kind_display()} — {self.email}"
+
+    def save(self, *args, **kwargs):
+        if self.city and not self.city_slug:
+            self.city_slug = slugify(self.city)
+        if self.ops_status in {self.OpsStatus.CONVERTED, self.OpsStatus.IGNORED}:
+            self.processed = True
+        return super().save(*args, **kwargs)

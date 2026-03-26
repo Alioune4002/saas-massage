@@ -10,6 +10,7 @@ from rest_framework import serializers
 from professionals.models import ProfessionalProfile
 from services.models import MassageService
 from .models import (
+    AccountRestriction,
     AvailabilitySlot,
     Booking,
     BookingEmailVerification,
@@ -18,6 +19,7 @@ from .models import (
     BookingThread,
     GuestBookingIdentity,
     IncidentReport,
+    RiskRegisterEntry,
     TrustedClient,
 )
 from .payments import (
@@ -107,6 +109,22 @@ class PublicBookingIntentSerializer(serializers.Serializer):
             professional=professional,
             client_email=attrs["client_email"],
         )
+
+        restriction = (
+            AccountRestriction.objects.filter(
+                client_email__iexact=attrs["client_email"].strip(),
+                status=AccountRestriction.Status.ACTIVE,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if restriction and restriction.restriction_type in {
+            AccountRestriction.RestrictionType.BOOKING_BLOCKED,
+            AccountRestriction.RestrictionType.BANNED,
+        }:
+            raise serializers.ValidationError(
+                "Cette adresse email ne peut pas créer de nouvelle réservation pour le moment."
+            )
 
         payment_terms = get_public_payment_summary(
             professional=professional,
@@ -458,6 +476,111 @@ class IncidentReportSerializer(serializers.ModelSerializer):
 
     def get_evidences_count(self, obj):
         return obj.evidences.count()
+
+
+class AccountRestrictionSerializer(serializers.ModelSerializer):
+    created_by_email = serializers.EmailField(source="created_by.email", read_only=True)
+    revoked_by_email = serializers.EmailField(source="revoked_by.email", read_only=True)
+    professional_name = serializers.CharField(source="professional.business_name", read_only=True)
+
+    class Meta:
+        model = AccountRestriction
+        fields = (
+            "id",
+            "incident",
+            "subject_type",
+            "user",
+            "professional",
+            "professional_name",
+            "client_email",
+            "client_phone",
+            "restriction_type",
+            "status",
+            "reason",
+            "notes",
+            "starts_at",
+            "ends_at",
+            "created_by",
+            "created_by_email",
+            "revoked_by",
+            "revoked_by_email",
+            "revoked_at",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class RiskRegisterEntrySerializer(serializers.ModelSerializer):
+    professional_name = serializers.CharField(source="professional.business_name", read_only=True)
+    reviewed_by_email = serializers.EmailField(source="reviewed_by.email", read_only=True)
+
+    class Meta:
+        model = RiskRegisterEntry
+        fields = (
+            "id",
+            "subject_type",
+            "professional",
+            "professional_name",
+            "booking",
+            "client_email",
+            "client_phone",
+            "risk_level",
+            "booking_restriction_status",
+            "practitioner_trust_status",
+            "reason",
+            "details",
+            "is_active",
+            "reviewed_by",
+            "reviewed_by_email",
+            "reviewed_at",
+            "expires_at",
+            "resolved_at",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class IncidentDecisionAdminSerializer(serializers.Serializer):
+    decision_type = serializers.ChoiceField(
+        choices=("dismiss", "warn", "restrict", "suspend", "ban")
+    )
+    notes = serializers.CharField(required=False, allow_blank=True)
+    duration_days = serializers.IntegerField(required=False, min_value=1, allow_null=True)
+
+
+class AdminIncidentReportSerializer(IncidentReportSerializer):
+    booking_id = serializers.UUIDField(source="booking.id", read_only=True)
+    professional_name = serializers.CharField(source="booking.professional.business_name", read_only=True)
+    client_email = serializers.EmailField(source="booking.client_email", read_only=True)
+    client_name = serializers.SerializerMethodField()
+    restrictions = AccountRestrictionSerializer(many=True, read_only=True)
+    decisions = serializers.SerializerMethodField()
+
+    class Meta(IncidentReportSerializer.Meta):
+        fields = IncidentReportSerializer.Meta.fields + (
+            "booking_id",
+            "professional_name",
+            "client_email",
+            "client_name",
+            "restrictions",
+            "decisions",
+        )
+
+    def get_client_name(self, obj):
+        return f"{obj.booking.client_first_name} {obj.booking.client_last_name}".strip()
+
+    def get_decisions(self, obj):
+        return [
+            {
+                "id": str(decision.id),
+                "decision_type": decision.decision_type,
+                "notes": decision.notes,
+                "amount_eur": str(decision.amount_eur),
+                "created_at": decision.created_at,
+                "created_by_email": getattr(decision.created_by, "email", ""),
+            }
+            for decision in obj.decisions.order_by("-created_at")
+        ]
 
 
 class ProfessionalBookingSerializer(serializers.ModelSerializer):

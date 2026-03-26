@@ -15,12 +15,14 @@ Le projet combine :
 - dossier : [`frontend`](./frontend)
 - stack : `Next.js 16`, `React 19`, `TypeScript`
 - rôle :
-  - landing page
+  - landing praticiens sur `/`
+  - entrée client dédiée sur `/trouver-un-praticien`
+  - annuaire sur `/annuaire`
   - pages publiques praticiens
-  - annuaire
   - revendication de fiches importées
   - espace praticien
-  - dashboard ops admin
+  - cockpit ops admin
+  - pages admin modération / support / analytics
 
 ### Backend
 - dossier : [`backend`](./backend)
@@ -97,6 +99,7 @@ Variables principales :
 - Marketplace : `NUADYX_DEFAULT_DEPOSIT_PERCENTAGE`, `NUADYX_MIN_DEPOSIT_PERCENTAGE`, `NUADYX_MAX_DEPOSIT_PERCENTAGE`, `NUADYX_UNVERIFIED_PRACTITIONER_MAX_DEPOSIT_PERCENTAGE`
 - Booking sécurité : `NUADYX_BOOKING_EMAIL_VERIFICATION_MINUTES`, `NUADYX_BOOKING_EMAIL_MAX_RESENDS`, `NUADYX_BOOKING_EMAIL_MAX_ATTEMPTS`, `NUADYX_GUEST_BOOKING_HOLD_MINUTES`
 - Annulation / validation : `NUADYX_FULL_REFUND_NOTICE_HOURS`, `NUADYX_PARTIAL_REFUND_NOTICE_HOURS`, `NUADYX_PARTIAL_REFUND_RATE`, `NUADYX_AUTO_RELEASE_AFTER_HOURS`, `NUADYX_INCIDENT_REPORT_WINDOW_HOURS`
+- Croissance locale : `NUADYX_CITY_OBJECTIVE_DEFAULT`, `NUADYX_CITY_OBJECTIVE_CLAIMED_DEFAULT`, `NUADYX_CITY_OBJECTIVE_ACTIVE_DEFAULT`
 - Feature flags : `NUADYX_FEATURE_COOKIE_CONSENT`, `NUADYX_FEATURE_PRACTITIONER_VERIFICATION`, `NUADYX_FEATURE_REVIEW_REPLIES`
 
 ## Modules backend
@@ -113,6 +116,7 @@ Variables principales :
 - compatibilité avec les anciens endpoints annuaire
 - vérification praticien
 - référentiel FR de localisation pour villes, codes postaux, départements et régions
+- socle de ranking interne pour la visibilité praticien
 
 ### `services`
 - prestations proposées
@@ -131,6 +135,7 @@ Variables principales :
 - validation de prestation et auto-validation
 - incidents, no-show, registre de risque interne
 - messagerie minimale liée à la réservation
+- modération V1 via incidents, registre de risque et restrictions de compte
 - webhook Stripe
 
 ### `assistant`
@@ -150,6 +155,9 @@ Variables principales :
 - runtime config
 - email transactionnel
 - permissions transverses
+- messages plateforme in-app
+- annonces admin
+- analytics admin transverses
 
 ### `directory`
 - registre des sources autorisées
@@ -180,6 +188,7 @@ Racines utiles :
 
 ### Public
 - `/`
+- `/trouver-un-praticien`
 - `/annuaire`
 - `/annuaire/[ville]`
 - `/praticiens/[slug]`
@@ -203,6 +212,131 @@ Racines utiles :
 
 ### Admin / ops
 - `/ops`
+- `/admin/moderation`
+- `/admin/support`
+- `/admin/analytics`
+
+## Séparation praticiens / clients
+
+La structure front est maintenant explicitement séparée :
+
+- `/` = landing 100 % praticiens
+  - visibilité
+  - page publique type mini site vitrine
+  - prestations / créneaux / demandes
+  - assistant
+  - gratuit pendant le lancement
+- `/trouver-un-praticien` = porte d’entrée client
+  - recherche locale
+  - accès annuaire
+  - favoris
+  - suggestion de praticien
+  - recommandation / attente dans une ville
+- `/annuaire` = listing réel + SEO + browse
+
+La vieille route `/praticiens` redirige désormais vers `/trouver-un-praticien`.
+
+## Cockpit villes / acquisition
+
+`/ops` pilote maintenant l’annuaire ville par ville.
+
+Le cockpit repose sur :
+- `LocationIndex` pour le référentiel France
+- `CityGrowthPlan` pour les objectifs locaux configurables
+- `ImportedProfile`, `PractitionerClaim`, `DirectoryInterestLead`, `ContactCampaign` et `ContactMessageLog` pour les métriques réelles
+
+Ce que montre le cockpit :
+- couverture par ville
+- objectif local et progression
+- statut de croissance
+- priorité ops
+- funnel d’acquisition local
+- suggestions, profils importés et campagnes liés à la ville
+- recommandations explicables
+
+Endpoints ops principaux :
+- `GET /api/admin/acquisition/cities`
+- `POST /api/admin/acquisition/cities`
+- `GET /api/admin/acquisition/cities/:city_slug`
+- `PATCH /api/admin/acquisition/cities/:city_slug`
+- `GET /api/admin/acquisition/cities/:city_slug/funnel`
+- `GET /api/admin/acquisition/cities/:city_slug/profiles`
+- `GET /api/admin/acquisition/cities/:city_slug/suggestions`
+- `GET /api/admin/acquisition/cities/:city_slug/campaigns`
+
+Règles actuelles :
+- un plan ville ne crée jamais de faux praticiens
+- les suggestions restent des pistes ops jusqu’à revue humaine
+- les campagnes locales restent bornées par les sources whitelistées et les règles de contact
+- les calculs sont centralisés côté backend dans `backend/directory/acquisition.py`
+
+## Admin complète
+
+La structure admin V1 est maintenant séparée en 4 zones :
+
+- `/ops`
+  - cockpit business / acquisition / annuaire / claims / imports / campagnes
+- `/admin/moderation`
+  - signalements de réservation
+  - restrictions actives
+  - registre de risque
+  - décisions modérateur
+- `/admin/support`
+  - utilisateurs
+  - messages in-app
+  - annonces admin
+- `/admin/analytics`
+  - KPI disponibles réellement dans la base
+  - ratios
+  - villes qui performent
+
+Endpoints admin ajoutés ou étendus :
+- `GET /api/admin/moderation/overview`
+- `GET /api/admin/moderation/incidents`
+- `GET /api/admin/moderation/incidents/:id`
+- `POST /api/admin/moderation/incidents/:id/decide`
+- `GET /api/admin/moderation/restrictions`
+- `GET /api/admin/moderation/risk-entries`
+- `GET /api/admin/support/users`
+- `GET/POST /api/admin/support/messages`
+- `GET/POST /api/admin/support/announcements`
+- `GET /api/admin/analytics/overview`
+
+Support in-app utilisateur :
+- `GET /api/me/platform-messages`
+- `PATCH /api/me/platform-messages/:id`
+
+## Visibilité praticien / ranking interne
+
+NUADYX pose maintenant un socle explicable pour la mise en avant des praticiens.
+
+Le calcul actuel vit dans :
+- [`backend/professionals/ranking.py`](./backend/professionals/ranking.py)
+
+Ce socle produit :
+- `profile_completeness_score`
+- `profile_visibility_score`
+- `ranking_signals`
+
+Les signaux pris en compte à ce stade :
+- bio et accroche renseignées
+- ville principale structurée
+- photos
+- services actifs
+- créneaux ouverts
+- spécialités
+- contact public
+- règles de réservation
+- avis approuvés
+- réservations et prestations réalisées
+- badge vérifié
+- activation de la réservation en ligne
+- incidents ouverts ou en revue comme signal négatif
+
+Le score n’est pas encore utilisé comme tri public principal.
+Il sert déjà à :
+- donner un retour lisible au praticien dans son espace profil public
+- préparer les futures logiques de visibilité / mise en avant sans promesse trompeuse
 
 ## Qualité et vérifications
 

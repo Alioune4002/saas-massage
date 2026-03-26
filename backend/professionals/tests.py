@@ -359,3 +359,103 @@ class PractitionerContactsTests(TestCase):
         self.assertTrue(contact.is_trusted)
         self.assertEqual(contact.tags.count(), 2)
         self.assertEqual(contact.private_note.content, "Cliente très régulière le midi.")
+
+
+class PractitionerGeographyTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="geo-pro",
+            email="geo-pro@example.com",
+            password="secret1234",
+            role="professional",
+        )
+        self.profile = ProfessionalProfile.objects.create(
+            user=self.user,
+            business_name="Cabinet Geo",
+            slug="cabinet-geo",
+            city="",
+        )
+        LocationIndex.objects.create(
+            location_type=LocationIndex.LocationType.CITY,
+            label="Quimper",
+            city="Quimper",
+            postal_code="29000",
+            department_code="29",
+            department_name="Finistère",
+            region="Bretagne",
+            slug="quimper",
+            priority=20,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def test_dashboard_profile_update_hydrates_geography_from_location_index(self):
+        response = self.client.patch(
+            "/api/dashboard/profile/",
+            {
+                "city": "Quimper",
+                "postal_code": "29000",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.city, "Quimper")
+        self.assertEqual(self.profile.postal_code, "29000")
+        self.assertEqual(self.profile.department_code, "29")
+        self.assertEqual(self.profile.region, "Bretagne")
+
+
+class PractitionerRankingTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="ranking-pro",
+            email="ranking-pro@example.com",
+            password="secret1234",
+            role="professional",
+        )
+        self.profile = ProfessionalProfile.objects.create(
+            user=self.user,
+            business_name="Cabinet Visibilité",
+            slug="cabinet-visibilite",
+            city="Quimper",
+            bio="Présentation claire et rassurante.",
+            public_headline="Massage bien-être à Quimper",
+            specialties=["relaxation", "récupération"],
+            phone="0600000000",
+            public_email="contact@cabinet-visibilite.fr",
+            payment_message="Annulation gratuite 48 h avant.",
+            verification_badge_status=ProfessionalProfile.VerificationBadgeStatus.VERIFIED,
+            accepts_online_booking=True,
+        )
+        self.service = MassageService.objects.create(
+            professional=self.profile,
+            title="Massage relaxant",
+            short_description="Détente profonde",
+            full_description="Un massage sur mesure pour relâcher les tensions.",
+            service_category="relaxant",
+            duration_minutes=60,
+            price_eur="80.00",
+        )
+        start_at = timezone.now() + timedelta(days=3)
+        self.slot = AvailabilitySlot.objects.create(
+            professional=self.profile,
+            service=self.service,
+            start_at=start_at,
+            end_at=start_at + timedelta(hours=1),
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def test_dashboard_profile_returns_ranking_snapshot(self):
+        response = self.client.get("/api/dashboard/profile/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("profile_completeness_score", response.data)
+        self.assertIn("profile_visibility_score", response.data)
+        self.assertIn("ranking_signals", response.data)
+        self.assertGreater(response.data["profile_completeness_score"], 0)
+        self.assertGreater(response.data["profile_visibility_score"], 0)
+        self.assertTrue(response.data["ranking_signals"]["completeness_signals"]["bio"])
+        self.assertEqual(response.data["ranking_signals"]["services_count"], 1)

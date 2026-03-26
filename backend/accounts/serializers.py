@@ -6,6 +6,7 @@ from rest_framework import serializers
 from rest_framework.authtoken.models import Token
 
 from common.legal import LEGAL_DOCUMENTS, get_required_practitioner_registration_documents
+from common.permissions import get_admin_capabilities
 from common.models import LegalAcceptanceRecord
 from .models import User
 from professionals.models import (
@@ -19,6 +20,7 @@ class UserMeSerializer(serializers.ModelSerializer):
     onboarding_completed = serializers.SerializerMethodField()
     professional_slug = serializers.SerializerMethodField()
     professional_name = serializers.SerializerMethodField()
+    admin_capabilities = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -29,6 +31,7 @@ class UserMeSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "role",
+            "admin_capabilities",
             "onboarding_completed",
             "professional_slug",
             "professional_name",
@@ -45,6 +48,9 @@ class UserMeSerializer(serializers.ModelSerializer):
     def get_professional_name(self, obj):
         profile = getattr(obj, "professional_profile", None)
         return profile.business_name if profile else ""
+
+    def get_admin_capabilities(self, obj):
+        return get_admin_capabilities(obj) if obj.role == User.Role.ADMIN else {}
 
 
 class LoginSerializer(serializers.Serializer):

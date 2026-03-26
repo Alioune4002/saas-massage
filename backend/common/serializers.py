@@ -2,7 +2,12 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .legal import COOKIE_CONSENT_VERSION, LEGAL_DOCUMENTS
-from .models import CookieConsentRecord, LegalAcceptanceRecord
+from .models import (
+    AdminAnnouncement,
+    CookieConsentRecord,
+    LegalAcceptanceRecord,
+    PlatformMessage,
+)
 
 
 class RuntimeConfigSerializer(serializers.Serializer):
@@ -87,3 +92,97 @@ class LegalAcceptanceSerializer(serializers.Serializer):
             user_agent_hash=self.context["user_agent_hash"],
             metadata=validated_data.get("metadata", {}),
         )
+
+
+class AdminUserSummarySerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    email = serializers.EmailField()
+    first_name = serializers.CharField(allow_blank=True)
+    last_name = serializers.CharField(allow_blank=True)
+    role = serializers.CharField()
+    is_active = serializers.BooleanField()
+    professional_slug = serializers.CharField(allow_blank=True)
+    professional_name = serializers.CharField(allow_blank=True)
+    date_joined = serializers.DateTimeField()
+
+
+class PlatformMessageSerializer(serializers.ModelSerializer):
+    recipient_email = serializers.EmailField(source="recipient_user.email", read_only=True)
+    recipient_name = serializers.SerializerMethodField()
+    created_by_email = serializers.EmailField(source="created_by.email", read_only=True)
+
+    class Meta:
+        model = PlatformMessage
+        fields = (
+            "id",
+            "recipient_user",
+            "recipient_email",
+            "recipient_name",
+            "category",
+            "title",
+            "body",
+            "display_mode",
+            "reply_allowed",
+            "is_read",
+            "is_active",
+            "sent_at",
+            "read_at",
+            "created_by",
+            "created_by_email",
+            "metadata",
+            "created_at",
+        )
+        read_only_fields = (
+            "id",
+            "recipient_email",
+            "recipient_name",
+            "is_read",
+            "sent_at",
+            "read_at",
+            "created_by_email",
+            "created_at",
+        )
+
+    def get_recipient_name(self, obj):
+        full_name = f"{obj.recipient_user.first_name} {obj.recipient_user.last_name}".strip()
+        return full_name or obj.recipient_user.email
+
+
+class MyPlatformMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PlatformMessage
+        fields = (
+            "id",
+            "category",
+            "title",
+            "body",
+            "display_mode",
+            "reply_allowed",
+            "is_read",
+            "is_active",
+            "sent_at",
+            "read_at",
+        )
+        read_only_fields = fields
+
+
+class AdminAnnouncementSerializer(serializers.ModelSerializer):
+    created_by_email = serializers.EmailField(source="created_by.email", read_only=True)
+
+    class Meta:
+        model = AdminAnnouncement
+        fields = (
+            "id",
+            "title",
+            "body",
+            "audience_role",
+            "display_mode",
+            "is_active",
+            "starts_at",
+            "ends_at",
+            "created_by",
+            "created_by_email",
+            "metadata",
+            "created_at",
+        )
+        read_only_fields = ("id", "created_by_email", "created_at")

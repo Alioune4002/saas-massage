@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.core.validators import MinValueValidator
+from django.utils import timezone
 
 from common.models import TimeStampedUUIDModel
 from professionals.models import ProfessionalProfile
@@ -856,6 +857,92 @@ class RiskRegisterEntry(TimeStampedUUIDModel):
             models.Index(fields=("subject_type", "risk_level", "is_active")),
             models.Index(fields=("client_email", "is_active")),
             models.Index(fields=("professional", "is_active")),
+        ]
+
+
+class AccountRestriction(TimeStampedUUIDModel):
+    class SubjectType(models.TextChoices):
+        PRACTITIONER = "practitioner", "Praticien"
+        CLIENT_EMAIL = "client_email", "Client par email"
+        CLIENT_PHONE = "client_phone", "Client par téléphone"
+        USER = "user", "Utilisateur"
+
+    class RestrictionType(models.TextChoices):
+        WARNING = "warning", "Avertissement"
+        BOOKING_REVIEW = "booking_review", "Réservation sous revue"
+        BOOKING_BLOCKED = "booking_blocked", "Réservation bloquée"
+        PAYOUT_SUSPENDED = "payout_suspended", "Versement suspendu"
+        ACCOUNT_SUSPENDED = "account_suspended", "Compte suspendu"
+        BANNED = "banned", "Bannissement"
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        EXPIRED = "expired", "Expirée"
+        REVOKED = "revoked", "Révoquée"
+
+    incident = models.ForeignKey(
+        IncidentReport,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="restrictions",
+    )
+    subject_type = models.CharField(max_length=20, choices=SubjectType.choices)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="account_restrictions",
+    )
+    professional = models.ForeignKey(
+        ProfessionalProfile,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="account_restrictions",
+    )
+    client_email = models.EmailField(blank=True)
+    client_phone = models.CharField(max_length=30, blank=True)
+    restriction_type = models.CharField(max_length=30, choices=RestrictionType.choices)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+    )
+    reason = models.CharField(max_length=220)
+    notes = models.TextField(blank=True)
+    starts_at = models.DateTimeField(default=timezone.now)
+    ends_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_account_restrictions",
+    )
+    revoked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="revoked_account_restrictions",
+    )
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "restriction de compte"
+        verbose_name_plural = "restrictions de compte"
+        ordering = ("-created_at",)
+        permissions = [
+            ("moderate_incidents", "Can moderate incidents"),
+            ("manage_restrictions", "Can manage account restrictions"),
+        ]
+        indexes = [
+            models.Index(fields=("subject_type", "status")),
+            models.Index(fields=("professional", "status")),
+            models.Index(fields=("client_email", "status")),
+            models.Index(fields=("user", "status")),
         ]
 
 

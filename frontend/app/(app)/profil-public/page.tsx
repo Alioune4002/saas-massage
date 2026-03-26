@@ -131,6 +131,29 @@ export default function PublicProfileSettingsPage() {
     },
     [draft]
   );
+  const rankingChecklist = useMemo(() => {
+    const signals = profile?.ranking_signals?.completeness_signals;
+    if (!signals) {
+      return [];
+    }
+
+    const labels: Array<[keyof typeof signals, string]> = [
+      ["bio", "Ajouter une présentation claire"],
+      ["headline", "Renseigner une accroche visible"],
+      ["city", "Préciser la ville principale"],
+      ["photos", "Ajouter une photo de profil ou de couverture"],
+      ["services", "Publier au moins une prestation"],
+      ["availabilities", "Ouvrir des créneaux"],
+      ["specialties", "Renseigner vos spécialités"],
+      ["contact", "Ajouter un contact public"],
+      ["booking_rules", "Expliquer vos règles de réservation"],
+    ];
+
+    return labels
+      .filter(([key]) => !signals[key])
+      .map(([, label]) => label)
+      .slice(0, 4);
+  }, [profile]);
 
   async function handleCopyLink() {
     if (!publicUrl) {
@@ -292,6 +315,67 @@ export default function PublicProfileSettingsPage() {
         enregistrés sur ton profil. Cette page pilote désormais la version
         publique réellement affichée à tes clients.
       </Notice>
+
+      {profile ? (
+        <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+          <Card>
+            <CardHeader
+              title="Mise en avant dans l’annuaire"
+              subtitle="NUADYX privilégie les profils complets, actifs et fiables. Ce cadrage sert à mieux guider tes prochaines améliorations."
+            />
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-[var(--radius-lg)] border border-border/70 bg-surface-subtle p-4">
+                <p className="text-sm text-muted-foreground">Complétude du profil</p>
+                <p className="mt-2 text-3xl font-semibold text-foreground">
+                  {profile.profile_completeness_score}%
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Présentation, services, contacts, photos et règles de réservation.
+                </p>
+              </div>
+
+              <div className="rounded-[var(--radius-lg)] border border-border/70 bg-surface-subtle p-4">
+                <p className="text-sm text-muted-foreground">Visibilité estimée</p>
+                <p className="mt-2 text-3xl font-semibold text-foreground">
+                  {profile.profile_visibility_score}%
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Activité, fiabilité, créneaux, avis et statut vérifié renforcent la présence locale.
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Prochaines améliorations utiles"
+              subtitle="Pas de promesse magique : ces signaux servent surtout à rendre le profil plus clair, plus fiable et plus facile à recommander."
+            />
+
+            <div className="mt-6 grid gap-3">
+              {rankingChecklist.length > 0 ? (
+                rankingChecklist.map((item) => (
+                  <div
+                    key={item}
+                    className="rounded-[var(--radius-md)] border border-border/70 bg-white/70 px-4 py-3 text-sm text-foreground shadow-[var(--shadow-soft)]"
+                  >
+                    {item}
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[var(--radius-md)] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                  Ton profil coche déjà les principaux signaux de base. Continue surtout à garder des créneaux à jour et une expérience fiable.
+                </div>
+              )}
+
+              <div className="rounded-[var(--radius-md)] border border-border/70 bg-surface-subtle px-4 py-3 text-sm text-muted-foreground">
+                Les profils vérifiés, avec peu d’annulations et une activité régulière, sont mieux placés pour gagner en visibilité pendant le lancement.
+              </div>
+            </div>
+          </Card>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[1.02fr_0.98fr]">
         <div className="space-y-4">

@@ -350,11 +350,82 @@ class RemovalRequest(TimeStampedUUIDModel):
         return f"{self.requester_email} — {self.status}"
 
 
+class CityGrowthPlan(TimeStampedUUIDModel):
+    class PriorityLevel(models.TextChoices):
+        LOW = "low", "Faible"
+        MEDIUM = "medium", "Moyenne"
+        HIGH = "high", "Haute"
+        CRITICAL = "critical", "Critique"
+
+    class GrowthStatus(models.TextChoices):
+        EMPTY = "empty", "Vide"
+        SEED = "seed", "Amorcée"
+        BUILDING = "building", "En croissance"
+        HEALTHY = "healthy", "Saine"
+        SATURATED = "saturated", "Saturée"
+        DEPRIORITIZED = "deprioritized", "Dépriorisée"
+
+    location = models.OneToOneField(
+        "professionals.LocationIndex",
+        on_delete=models.PROTECT,
+        related_name="city_growth_plan",
+    )
+    city_label = models.CharField(max_length=160)
+    city_slug = models.SlugField(max_length=170, unique=True)
+    department_code = models.CharField(max_length=10, blank=True)
+    region = models.CharField(max_length=120, blank=True)
+    objective_profiles_total = models.PositiveIntegerField(default=10)
+    objective_claimed_profiles = models.PositiveIntegerField(default=4)
+    objective_active_profiles = models.PositiveIntegerField(default=3)
+    priority_level = models.CharField(
+        max_length=20,
+        choices=PriorityLevel.choices,
+        default=PriorityLevel.MEDIUM,
+    )
+    growth_status = models.CharField(
+        max_length=20,
+        choices=GrowthStatus.choices,
+        default=GrowthStatus.SEED,
+    )
+    notes_internal = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "plan de croissance ville"
+        verbose_name_plural = "plans de croissance villes"
+        ordering = ("city_label",)
+        indexes = [
+            models.Index(fields=("city_slug",)),
+            models.Index(fields=("priority_level",)),
+            models.Index(fields=("growth_status",)),
+            models.Index(fields=("department_code",)),
+            models.Index(fields=("region",)),
+        ]
+
+    def __str__(self) -> str:
+        return self.city_label
+
+    def save(self, *args, **kwargs):
+        self.city_label = self.location.city or self.location.label
+        self.city_slug = self.location.slug
+        self.department_code = self.location.department_code
+        self.region = self.location.region
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
 class ContactCampaign(TimeStampedUUIDModel):
     class CampaignType(models.TextChoices):
         CLAIM_INVITE = "claim_invite", "Invitation de revendication"
         INCOMPLETE_PROFILE_NUDGE = "incomplete_profile_nudge", "Relance fiche incomplète"
         SOURCE_RECONTACT = "source_recontact", "Recontact source"
+
+    class ScopeType(models.TextChoices):
+        GLOBAL = "global", "Global"
+        CITY = "city", "Ville"
+        DEPARTMENT = "department", "Département"
+        REGION = "region", "Région"
+        SOURCE = "source", "Source"
 
     class Status(models.TextChoices):
         DRAFT = "draft", "Brouillon"
@@ -374,6 +445,15 @@ class ContactCampaign(TimeStampedUUIDModel):
     )
     campaign_type = models.CharField(max_length=30, choices=CampaignType.choices)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    campaign_scope_type = models.CharField(
+        max_length=20,
+        choices=ScopeType.choices,
+        default=ScopeType.GLOBAL,
+    )
+    campaign_scope_value = models.CharField(max_length=170, blank=True)
+    city = models.CharField(max_length=120, blank=True)
+    department_code = models.CharField(max_length=10, blank=True)
+    region = models.CharField(max_length=120, blank=True)
     audience_filter_json = models.JSONField(default=dict, blank=True)
     email_template_key = models.CharField(max_length=80)
     created_by = models.ForeignKey(
@@ -398,6 +478,12 @@ class ContactCampaign(TimeStampedUUIDModel):
         verbose_name = "campagne de contact"
         verbose_name_plural = "campagnes de contact"
         ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("city",)),
+            models.Index(fields=("department_code",)),
+            models.Index(fields=("region",)),
+            models.Index(fields=("campaign_scope_type", "campaign_scope_value")),
+        ]
 
     def __str__(self) -> str:
         return self.name

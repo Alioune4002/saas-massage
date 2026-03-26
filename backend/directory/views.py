@@ -5,7 +5,7 @@ import json
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import generics, parsers, permissions
+from rest_framework import generics, parsers, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -16,15 +16,15 @@ from common.permissions import (
     CanReviewSources,
     IsAdminUser,
 )
-from professionals.crm import build_city_coverage_metrics, filter_directory_querysets_by_location
+from professionals.crm import filter_directory_querysets_by_location, resolve_profile_geography
 from professionals.models import DirectoryInterestLead, ProfessionalProfile
 from professionals.serializers import (
-    CityCoverageMetricSerializer,
     DirectoryInterestLeadAdminSerializer,
     PublicProfessionalSerializer,
 )
 
 from .models import (
+    CityGrowthPlan,
     ContactCampaign,
     ImportedProfile,
     PractitionerClaim,
@@ -36,6 +36,9 @@ from .serializers import (
     ClaimCompleteOnboardingSerializer,
     ClaimRequestSerializer,
     ClaimVerifySerializer,
+    CityAcquisitionFunnelSerializer,
+    CityAcquisitionSummarySerializer,
+    CityGrowthPlanSerializer,
     CompleteProfileFromImportSerializer,
     ContactCampaignSerializer,
     ImportedProfileBulkActionSerializer,
@@ -46,6 +49,15 @@ from .serializers import (
     SourceImportJobSerializer,
     SourceRegistrySerializer,
     UnifiedPublicPractitionerSerializer,
+)
+from .acquisition import (
+    get_city_campaigns_queryset,
+    get_city_funnel,
+    get_city_growth_row,
+    get_city_imported_profiles_queryset,
+    get_city_suggestions_queryset,
+    get_or_create_city_growth_plan,
+    list_city_growth_rows,
 )
 from .services import (
     build_campaign_targets,
@@ -344,9 +356,17 @@ class AdminAcquisitionCoverageView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanReviewProfiles]
 
     def get(self, request):
-        objective = int(request.query_params.get("objective", 10) or 10)
-        metrics = build_city_coverage_metrics(objective_per_city=objective)
-        serializer = CityCoverageMetricSerializer(metrics, many=True)
+        metrics = list_city_growth_rows(
+            {
+                "city": request.query_params.get("city", ""),
+                "department_code": request.query_params.get("department_code", ""),
+                "region": request.query_params.get("region", ""),
+                "growth_status": request.query_params.get("growth_status", ""),
+                "priority_level": request.query_params.get("priority_level", ""),
+                "processed": request.query_params.get("processed", ""),
+            }
+        )
+        serializer = CityAcquisitionSummarySerializer(metrics, many=True)
         return Response(serializer.data)
 
 
@@ -357,15 +377,153 @@ class AdminAcquisitionSuggestionsView(generics.ListAPIView):
     def get_queryset(self):
         queryset = DirectoryInterestLead.objects.order_by("-created_at")
         city = self.request.query_params.get("city")
+        city_slug = self.request.query_params.get("city_slug")
         kind = self.request.query_params.get("kind")
         processed = self.request.query_params.get("processed")
+        ops_status = self.request.query_params.get("ops_status")
         if city:
             queryset = queryset.filter(city__icontains=city)
+        if city_slug:
+            queryset = queryset.filter(city_slug=city_slug)
         if kind:
             queryset = queryset.filter(kind=kind)
         if processed in {"true", "false"}:
             queryset = queryset.filter(processed=processed == "true")
+        if ops_status:
+            queryset = queryset.filter(ops_status=ops_status)
         return queryset
+
+
+class AdminAcquisitionSuggestionDetailView(generics.RetrieveUpdateAPIView):
+    serializer_class = DirectoryInterestLeadAdminSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanReviewProfiles]
+    queryset = DirectoryInterestLead.objects.select_related("assigned_to", "converted_to_imported_profile")
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        before = DirectoryInterestLeadAdminSerializer(instance).data
+        updated = serializer.save()
+        log_audit(
+            actor=self.request.user,
+            action="directory_interest_lead.updated",
+            obj=updated,
+            before=before,
+            after=DirectoryInterestLeadAdminSerializer(updated).data,
+        )
+
+
+class AdminCityGrowthPlansView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanReviewProfiles]
+
+    def get(self, request):
+        rows = list_city_growth_rows(
+            {
+                "city": request.query_params.get("city", ""),
+                "department_code": request.query_params.get("department_code", ""),
+                "region": request.query_params.get("region", ""),
+                "growth_status": request.query_params.get("growth_status", ""),
+                "priority_level": request.query_params.get("priority_level", ""),
+                "processed": request.query_params.get("processed", ""),
+            }
+        )
+        serializer = CityAcquisitionSummarySerializer(rows, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = CityGrowthPlanSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        log_audit(
+            actor=request.user,
+            action="city_growth_plan.created",
+            obj=instance,
+            after=CityGrowthPlanSerializer(instance).data,
+        )
+        return Response(
+            CityAcquisitionSummarySerializer(get_city_growth_row(instance.city_slug)).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AdminCityGrowthPlanDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanReviewProfiles]
+
+    def get(self, request, city_slug):
+        try:
+            row = get_city_growth_row(city_slug)
+        except ValueError:
+            return Response({"detail": "Ville introuvable."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = CityAcquisitionSummarySerializer(row)
+        return Response(serializer.data)
+
+    def patch(self, request, city_slug):
+        try:
+            instance = get_or_create_city_growth_plan(city_slug=city_slug)
+        except ValueError:
+            return Response({"detail": "Ville introuvable."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = CityGrowthPlanSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        before = CityGrowthPlanSerializer(instance).data
+        updated = serializer.save()
+        log_audit(
+            actor=request.user,
+            action="city_growth_plan.updated",
+            obj=updated,
+            before=before,
+            after=CityGrowthPlanSerializer(updated).data,
+        )
+        return Response(CityAcquisitionSummarySerializer(get_city_growth_row(updated.city_slug)).data)
+
+
+class AdminCityGrowthPlanFunnelView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanReviewProfiles]
+
+    def get(self, request, city_slug):
+        try:
+            funnel = get_city_funnel(city_slug)
+        except ValueError:
+            return Response({"detail": "Ville introuvable."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = CityAcquisitionFunnelSerializer(funnel)
+        return Response(serializer.data)
+
+
+class AdminCityGrowthPlanProfilesView(generics.ListAPIView):
+    serializer_class = ImportedProfileSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanReviewProfiles]
+
+    def get_queryset(self):
+        city_slug = self.kwargs["city_slug"]
+        queryset = get_city_imported_profiles_queryset(city_slug)
+        import_status = self.request.query_params.get("import_status")
+        claimable = self.request.query_params.get("claimable")
+        if import_status:
+            queryset = queryset.filter(import_status=import_status)
+        if claimable in {"true", "false"}:
+            queryset = queryset.filter(claimable=claimable == "true")
+        return queryset
+
+
+class AdminCityGrowthPlanSuggestionsView(generics.ListAPIView):
+    serializer_class = DirectoryInterestLeadAdminSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanReviewProfiles]
+
+    def get_queryset(self):
+        queryset = get_city_suggestions_queryset(self.kwargs["city_slug"])
+        processed = self.request.query_params.get("processed")
+        ops_status = self.request.query_params.get("ops_status")
+        if processed in {"true", "false"}:
+            queryset = queryset.filter(processed=processed == "true")
+        if ops_status:
+            queryset = queryset.filter(ops_status=ops_status)
+        return queryset
+
+
+class AdminCityGrowthPlanCampaignsView(generics.ListAPIView):
+    serializer_class = ContactCampaignSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanReviewProfiles]
+
+    def get_queryset(self):
+        return get_city_campaigns_queryset(self.kwargs["city_slug"])
 
 
 class AdminRemovalRequestsView(generics.ListAPIView):
@@ -613,12 +771,25 @@ class MeCompleteProfileFromImportView(APIView):
         profile.acquisition_source = ProfessionalProfile.AcquisitionSource.IMPORTED_CLAIMED
         profile.business_name = profile.business_name or imported_profile.business_name or imported_profile.public_name
         profile.city = profile.city or imported_profile.city
+        profile.postal_code = profile.postal_code or imported_profile.postal_code
         profile.service_area = profile.service_area or imported_profile.region
+        profile.region = profile.region or imported_profile.region
         profile.bio = profile.bio or imported_profile.bio_short
         profile.public_headline = profile.public_headline or imported_profile.public_status_note
         profile.specialties = profile.specialties or imported_profile.service_tags_json
         profile.phone = profile.phone or imported_profile.phone_public
         profile.public_email = profile.public_email or imported_profile.email_public
+        location = resolve_profile_geography(
+            city=profile.city,
+            postal_code=profile.postal_code,
+            department_code=profile.department_code,
+            region=profile.region or profile.service_area,
+        )
+        if location:
+            profile.city = location.city or profile.city
+            profile.postal_code = location.postal_code or profile.postal_code
+            profile.department_code = location.department_code or profile.department_code
+            profile.region = location.region or profile.region or profile.service_area
         profile.save()
 
         imported_profile.import_status = ImportedProfile.ImportStatus.CLAIMED

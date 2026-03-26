@@ -8,7 +8,9 @@ from rest_framework.test import APIClient
 from accounts.models import User
 from common.models import LegalAcceptanceRecord
 from directory.models import (
+    ContactMessageLog,
     ContactCampaign,
+    CityGrowthPlan,
     ImportedProfile,
     PractitionerClaim,
     RemovalRequest,
@@ -29,6 +31,17 @@ class DirectoryEndToEndFlowTests(TestCase):
             role=User.Role.ADMIN,
         )
         self.client.force_authenticate(self.admin)
+        LocationIndex.objects.create(
+            location_type=LocationIndex.LocationType.CITY,
+            label="Quimper",
+            city="Quimper",
+            postal_code="29000",
+            department_code="29",
+            department_name="Finistère",
+            region="Bretagne",
+            slug="quimper",
+            priority=20,
+        )
 
     def test_full_source_import_review_publish_claim_flow(self):
         source_response = self.client.post(
@@ -51,8 +64,8 @@ class DirectoryEndToEndFlowTests(TestCase):
         dry_run_file = SimpleUploadedFile(
             "praticiens.csv",
             (
-                "external_id,public_name,business_name,city,email_public,service_tags_json\n"
-                'csv-1,Ana Zen,Ana Zen Massage,Quimper,ana@example.com,"relaxant|deep_tissue"\n'
+                "external_id,public_name,business_name,city,postal_code,region,email_public,service_tags_json\n"
+                'csv-1,Ana Zen,Ana Zen Massage,Quimper,29000,Bretagne,ana@example.com,"relaxant|deep_tissue"\n'
             ).encode("utf-8"),
             content_type="text/csv",
         )
@@ -73,8 +86,8 @@ class DirectoryEndToEndFlowTests(TestCase):
         real_file = SimpleUploadedFile(
             "praticiens.csv",
             (
-                "external_id,public_name,business_name,city,email_public,service_tags_json\n"
-                'csv-1,Ana Zen,Ana Zen Massage,Quimper,ana@example.com,"relaxant|deep_tissue"\n'
+                "external_id,public_name,business_name,city,postal_code,region,email_public,service_tags_json\n"
+                'csv-1,Ana Zen,Ana Zen Massage,Quimper,29000,Bretagne,ana@example.com,"relaxant|deep_tissue"\n'
             ).encode("utf-8"),
             content_type="text/csv",
         )
@@ -174,6 +187,9 @@ class DirectoryEndToEndFlowTests(TestCase):
             professional_profile.acquisition_source,
             ProfessionalProfile.AcquisitionSource.IMPORTED_CLAIMED,
         )
+        self.assertEqual(professional_profile.postal_code, "29000")
+        self.assertEqual(professional_profile.department_code, "29")
+        self.assertEqual(professional_profile.region, "Bretagne")
         self.assertEqual(
             LegalAcceptanceRecord.objects.filter(user=professional_profile.user).count(),
             4,
@@ -263,6 +279,272 @@ class DirectoryPermissionTests(TestCase):
             f"/api/admin/contact-campaigns/{campaign_response.data['id']}/send"
         )
         self.assertEqual(send_response.status_code, 400)
+
+
+class CityGrowthOpsTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            email="admin-city@nuadyx.test",
+            username="admin-city",
+            password="testpass123",
+            role=User.Role.ADMIN,
+        )
+        self.client.force_authenticate(self.admin)
+
+        self.quimper = LocationIndex.objects.create(
+            location_type=LocationIndex.LocationType.CITY,
+            label="Quimper",
+            city="Quimper",
+            postal_code="29000",
+            department_code="29",
+            department_name="Finistère",
+            region="Bretagne",
+            slug="quimper",
+            priority=20,
+        )
+        self.brest = LocationIndex.objects.create(
+            location_type=LocationIndex.LocationType.CITY,
+            label="Brest",
+            city="Brest",
+            postal_code="29200",
+            department_code="29",
+            department_name="Finistère",
+            region="Bretagne",
+            slug="brest",
+            priority=18,
+        )
+        self.source = SourceRegistry.objects.create(
+            name="Source ville",
+            source_type=SourceRegistry.SourceType.MANUAL_CSV,
+            legal_status=SourceRegistry.LegalStatus.APPROVED,
+            is_active=True,
+            can_contact_imported_profiles=True,
+        )
+
+        practitioner_user = User.objects.create_user(
+            email="pro-city@nuadyx.test",
+            username="pro-city",
+            password="testpass123",
+            role=User.Role.PROFESSIONAL,
+        )
+        self.claimed_profile = ProfessionalProfile.objects.create(
+            user=practitioner_user,
+            business_name="Cabinet Quimper",
+            slug="cabinet-quimper",
+            city="Quimper",
+            postal_code="29000",
+            department_code="29",
+            region="Bretagne",
+            is_public=True,
+        )
+        self.imported_profile = ImportedProfile.objects.create(
+            source=self.source,
+            external_id="quimper-import-1",
+            public_name="Atelier Quimper",
+            business_name="Atelier Quimper",
+            city="Quimper",
+            postal_code="29000",
+            region="Bretagne",
+            email_public="atelier-quimper@example.com",
+            import_status=ImportedProfile.ImportStatus.PUBLISHED_UNCLAIMED,
+            is_public=True,
+            claimable=True,
+            publishable_minimum_ok=True,
+            contact_allowed_based_on_source_policy=True,
+        )
+        self.review_profile = ImportedProfile.objects.create(
+            source=self.source,
+            external_id="quimper-import-2",
+            public_name="Studio Quimper",
+            business_name="Studio Quimper",
+            city="Quimper",
+            postal_code="29000",
+            region="Bretagne",
+            import_status=ImportedProfile.ImportStatus.PENDING_REVIEW,
+            claimable=True,
+            publishable_minimum_ok=True,
+        )
+        self.brest_profile = ImportedProfile.objects.create(
+            source=self.source,
+            external_id="brest-import-1",
+            public_name="Brest Zen",
+            business_name="Brest Zen",
+            city="Brest",
+            postal_code="29200",
+            region="Bretagne",
+            import_status=ImportedProfile.ImportStatus.PUBLISHED_UNCLAIMED,
+            is_public=True,
+            claimable=True,
+            publishable_minimum_ok=True,
+            contact_allowed_based_on_source_policy=True,
+        )
+        self.suggestion = DirectoryInterestLead.objects.create(
+            kind=DirectoryInterestLead.Kind.SUGGEST_PRACTITIONER,
+            full_name="Client local",
+            email="client-local@example.com",
+            city="Quimper",
+            city_slug="quimper",
+            practitioner_name="Atelier Quimper",
+            message="Je recommande ce praticien.",
+            source_page="/annuaire/quimper",
+            processed=False,
+        )
+        self.claim = PractitionerClaim.objects.create(
+            imported_profile=self.imported_profile,
+            email="atelier-quimper@example.com",
+            status=PractitionerClaim.Status.APPROVED,
+        )
+        self.campaign = ContactCampaign.objects.create(
+            name="Campagne Quimper",
+            campaign_type=ContactCampaign.CampaignType.CLAIM_INVITE,
+            status=ContactCampaign.Status.READY,
+            campaign_scope_type=ContactCampaign.ScopeType.CITY,
+            campaign_scope_value="quimper",
+            city="Quimper",
+            department_code="29",
+            region="Bretagne",
+            audience_filter_json={"city": "Quimper", "city_slug": "quimper"},
+            email_template_key="claim_invite",
+            created_by=self.admin,
+        )
+        ContactMessageLog.objects.create(
+            campaign=self.campaign,
+            imported_profile=self.imported_profile,
+            to_email="atelier-quimper@example.com",
+            template_key="claim_invite",
+            status=ContactMessageLog.Status.SENT,
+            sent_at=timezone.now(),
+            meta_json={},
+        )
+
+    def test_can_create_and_update_city_growth_plan(self):
+        response = self.client.post(
+            "/api/admin/acquisition/cities",
+            {
+                "location_slug": "quimper",
+                "objective_profiles_total": 12,
+                "objective_claimed_profiles": 5,
+                "objective_active_profiles": 4,
+                "priority_level": "high",
+                "growth_status": "building",
+                "notes_internal": "Ville pilote à renforcer.",
+                "is_active": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["city_slug"], "quimper")
+        self.assertEqual(response.data["objective_profiles_total"], 12)
+
+        patch_response = self.client.patch(
+            "/api/admin/acquisition/cities/quimper",
+            {
+                "priority_level": "critical",
+                "growth_status": "seed",
+                "notes_internal": "Priorité absolue cette semaine.",
+            },
+            format="json",
+        )
+        self.assertEqual(patch_response.status_code, 200)
+        self.assertEqual(patch_response.data["priority_level"], "critical")
+        self.assertEqual(patch_response.data["growth_status"], "seed")
+        self.assertEqual(
+            CityGrowthPlan.objects.get(city_slug="quimper").notes_internal,
+            "Priorité absolue cette semaine.",
+        )
+
+    def test_city_growth_endpoints_expose_metrics_funnel_profiles_suggestions_and_campaigns(self):
+        CityGrowthPlan.objects.create(
+            location=self.quimper,
+            objective_profiles_total=10,
+            objective_claimed_profiles=4,
+            objective_active_profiles=3,
+            priority_level=CityGrowthPlan.PriorityLevel.HIGH,
+            growth_status=CityGrowthPlan.GrowthStatus.BUILDING,
+            is_active=True,
+        )
+
+        cities_response = self.client.get("/api/admin/acquisition/cities")
+        self.assertEqual(cities_response.status_code, 200)
+        quimper_row = next(item for item in cities_response.data if item["city_slug"] == "quimper")
+        self.assertEqual(quimper_row["total_profiles"], 3)
+        self.assertEqual(quimper_row["claimed_profiles"], 1)
+        self.assertEqual(quimper_row["unclaimed_profiles"], 1)
+        self.assertEqual(quimper_row["suggestions_count"], 1)
+        self.assertEqual(quimper_row["campaigns_count"], 1)
+        self.assertEqual(quimper_row["claims_validated"], 1)
+        self.assertTrue(quimper_row["recommended_action"])
+
+        funnel_response = self.client.get("/api/admin/acquisition/cities/quimper/funnel")
+        self.assertEqual(funnel_response.status_code, 200)
+        self.assertEqual(funnel_response.data["suggestions_received"], 1)
+        self.assertEqual(funnel_response.data["profiles_in_review"], 1)
+        self.assertEqual(funnel_response.data["profiles_published_unclaimed"], 1)
+        self.assertEqual(funnel_response.data["claims_validated"], 1)
+
+        profiles_response = self.client.get("/api/admin/acquisition/cities/quimper/profiles")
+        self.assertEqual(profiles_response.status_code, 200)
+        self.assertEqual(len(profiles_response.data), 2)
+
+        suggestions_response = self.client.get("/api/admin/acquisition/cities/quimper/suggestions")
+        self.assertEqual(suggestions_response.status_code, 200)
+        self.assertEqual(len(suggestions_response.data), 1)
+        self.assertEqual(suggestions_response.data[0]["city_slug"], "quimper")
+
+        campaigns_response = self.client.get("/api/admin/acquisition/cities/quimper/campaigns")
+        self.assertEqual(campaigns_response.status_code, 200)
+        self.assertEqual(len(campaigns_response.data), 1)
+        self.assertEqual(campaigns_response.data[0]["campaign_scope_type"], "city")
+
+    def test_city_total_profiles_does_not_double_count_claimed_imports(self):
+        self.imported_profile.import_status = ImportedProfile.ImportStatus.CLAIMED
+        self.imported_profile.is_public = False
+        self.imported_profile.claimable = False
+        self.imported_profile.save(update_fields=["import_status", "is_public", "claimable", "updated_at"])
+
+        CityGrowthPlan.objects.create(
+            location=self.quimper,
+            objective_profiles_total=10,
+            objective_claimed_profiles=4,
+            objective_active_profiles=3,
+            priority_level=CityGrowthPlan.PriorityLevel.HIGH,
+            growth_status=CityGrowthPlan.GrowthStatus.BUILDING,
+            is_active=True,
+        )
+
+        detail_response = self.client.get("/api/admin/acquisition/cities/quimper")
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.data["claimed_profiles"], 1)
+        self.assertEqual(detail_response.data["unclaimed_profiles"], 0)
+        self.assertEqual(detail_response.data["total_profiles"], 2)
+
+        funnel_response = self.client.get("/api/admin/acquisition/cities/quimper/funnel")
+        self.assertEqual(funnel_response.status_code, 200)
+        self.assertEqual(funnel_response.data["profiles_imported"], 2)
+        self.assertEqual(funnel_response.data["profiles_claimed"], 1)
+
+    def test_acquisition_suggestions_can_be_filtered_and_updated_by_city(self):
+        response = self.client.get(
+            "/api/admin/acquisition/suggestions",
+            {"city_slug": "quimper", "processed": "false"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+
+        update_response = self.client.patch(
+            f"/api/admin/acquisition/suggestions/{self.suggestion.id}",
+            {
+                "ops_status": "in_review",
+                "processed": False,
+                "ops_notes": "Traitement local démarré.",
+            },
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, 200)
+        self.suggestion.refresh_from_db()
+        self.assertEqual(self.suggestion.ops_status, DirectoryInterestLead.OpsStatus.IN_REVIEW)
+        self.assertEqual(self.suggestion.ops_notes, "Traitement local démarré.")
 
 
 class DirectoryLocationFilteringTests(TestCase):

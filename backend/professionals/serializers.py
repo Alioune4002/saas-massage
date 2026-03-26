@@ -2,10 +2,13 @@ import json
 from decimal import Decimal
 
 from django.conf import settings
+from django.utils.text import slugify
 from rest_framework import serializers
 from django.utils import timezone
 
 from reviews.serializers import PublicReviewSerializer
+from .crm import resolve_profile_geography
+from .ranking import build_profile_ranking_snapshot
 
 from .models import (
     ContactPrivateNote,
@@ -201,6 +204,9 @@ class PublicProfessionalSerializer(serializers.ModelSerializer):
             "activity_type",
             "practice_mode",
             "city",
+            "postal_code",
+            "department_code",
+            "region",
             "service_area",
             "venue_details",
             "access_details",
@@ -330,6 +336,9 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
     remove_cover_photo = serializers.BooleanField(write_only=True, required=False, default=False)
     payment_account = serializers.SerializerMethodField(read_only=True)
     verification = serializers.SerializerMethodField(read_only=True)
+    profile_completeness_score = serializers.SerializerMethodField(read_only=True)
+    profile_visibility_score = serializers.SerializerMethodField(read_only=True)
+    ranking_signals = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ProfessionalProfile
@@ -343,6 +352,9 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
             "activity_type",
             "practice_mode",
             "city",
+            "postal_code",
+            "department_code",
+            "region",
             "service_area",
             "venue_details",
             "access_details",
@@ -375,6 +387,9 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
             "cover_photo_url",
             "payment_account",
             "verification",
+            "profile_completeness_score",
+            "profile_visibility_score",
+            "ranking_signals",
             "remove_profile_photo",
             "remove_cover_photo",
             "onboarding_step",
@@ -478,6 +493,27 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        city = str(attrs.get("city", getattr(self.instance, "city", "")) or "").strip()
+        postal_code = str(
+            attrs.get("postal_code", getattr(self.instance, "postal_code", "")) or ""
+        ).strip()
+        department_code = str(
+            attrs.get("department_code", getattr(self.instance, "department_code", "")) or ""
+        ).strip().upper()
+        region = str(attrs.get("region", getattr(self.instance, "region", "")) or "").strip()
+
+        location = resolve_profile_geography(
+            city=city,
+            postal_code=postal_code,
+            department_code=department_code,
+            region=region,
+        )
+        if location:
+            attrs["city"] = location.city or city
+            attrs["postal_code"] = location.postal_code or postal_code
+            attrs["department_code"] = location.department_code or department_code
+            attrs["region"] = location.region or region
+
         instance = self.instance
         reservation_payment_mode = attrs.get(
             "reservation_payment_mode",
@@ -626,6 +662,15 @@ class ProfessionalDashboardSerializer(serializers.ModelSerializer):
             context=self.context,
         ).data
 
+    def get_profile_completeness_score(self, obj):
+        return build_profile_ranking_snapshot(obj)["profile_completeness_score"]
+
+    def get_profile_visibility_score(self, obj):
+        return build_profile_ranking_snapshot(obj)["profile_visibility_score"]
+
+    def get_ranking_signals(self, obj):
+        return build_profile_ranking_snapshot(obj)["ranking_signals"]
+
 
 class PublicDirectoryListingSerializer(serializers.Serializer):
     id = serializers.UUIDField()
@@ -731,14 +776,35 @@ class DirectoryInterestLeadSerializer(serializers.ModelSerializer):
             "full_name",
             "email",
             "city",
+            "city_slug",
+            "location_type",
             "practitioner_name",
             "message",
             "source_page",
         )
+        extra_kwargs = {
+            "city_slug": {"required": False, "allow_blank": True},
+        }
+
+    def validate(self, attrs):
+        city = str(attrs.get("city") or "").strip()
+        if city and not attrs.get("city_slug"):
+            matches = list(
+                LocationIndex.objects.filter(
+                    location_type=LocationIndex.LocationType.CITY,
+                    city__iexact=city,
+                    is_active=True,
+                )
+                .order_by("-priority", "label")[:2]
+            )
+            attrs["city_slug"] = matches[0].slug if len(matches) == 1 else slugify(city)
+        return attrs
 
 
 class DirectoryInterestLeadAdminSerializer(serializers.ModelSerializer):
     kind_label = serializers.CharField(source="get_kind_display", read_only=True)
+    assigned_to_email = serializers.SerializerMethodField()
+    converted_to_imported_profile_slug = serializers.SerializerMethodField()
 
     class Meta:
         model = DirectoryInterestLead
@@ -749,13 +815,29 @@ class DirectoryInterestLeadAdminSerializer(serializers.ModelSerializer):
             "full_name",
             "email",
             "city",
+            "city_slug",
+            "location_type",
             "practitioner_name",
             "message",
             "source_page",
+            "ops_status",
+            "converted_to_imported_profile",
+            "converted_to_imported_profile_slug",
+            "assigned_to",
+            "assigned_to_email",
+            "ops_notes",
             "processed",
             "created_at",
             "updated_at",
         )
+
+    def get_assigned_to_email(self, obj):
+        return getattr(obj.assigned_to, "email", "")
+
+    def get_converted_to_imported_profile_slug(self, obj):
+        if not obj.converted_to_imported_profile:
+            return ""
+        return obj.converted_to_imported_profile.slug
 
 
 class FavoritePractitionerSerializer(serializers.ModelSerializer):

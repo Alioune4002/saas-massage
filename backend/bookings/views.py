@@ -25,16 +25,24 @@ from common.communications import (
     send_client_service_validation_email,
     send_new_booking_request_email,
 )
-from common.permissions import HasProfessionalProfile, IsProfessionalUser
+from common.permissions import (
+    CanManageRestrictions,
+    CanModeratePlatform,
+    HasProfessionalProfile,
+    IsAdminUser,
+    IsProfessionalUser,
+)
 from professionals.models import ProfessionalPaymentAccount
 
 from .models import (
+    AccountRestriction,
     AvailabilitySlot,
     Booking,
     BookingEmailVerification,
     BookingMessage,
     BookingThread,
     GuestBookingIdentity,
+    IncidentDecision,
     IncidentReport,
     BookingPayment,
     PaymentWebhookEventLog,
@@ -70,6 +78,9 @@ from .serializers import (
     PaymentOverviewSerializer,
     ProfessionalAgendaSerializer,
     ProfessionalAvailabilitySerializer,
+    AdminIncidentReportSerializer,
+    AccountRestrictionSerializer,
+    RiskRegisterEntrySerializer,
     ProfessionalBookingSerializer,
     PublicBookingEmailVerificationSerializer,
     PublicAvailabilitySerializer,
@@ -77,6 +88,7 @@ from .serializers import (
     PublicBookingCreatedSerializer,
     PublicBookingVerificationStatusSerializer,
     BookingMessageSerializer,
+    IncidentDecisionAdminSerializer,
     IncidentReportSerializer,
     TrustedClientSerializer,
     ManualPaymentSerializer,
@@ -438,6 +450,285 @@ class PublicBookingIncidentView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class AdminModerationOverviewView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanModeratePlatform]
+
+    def get(self, request):
+        return Response(
+            {
+                "open_incidents": IncidentReport.objects.filter(
+                    status=IncidentReport.Status.OPEN
+                ).count(),
+                "in_review_incidents": IncidentReport.objects.filter(
+                    status=IncidentReport.Status.IN_REVIEW
+                ).count(),
+                "critical_incidents": IncidentReport.objects.filter(
+                    severity=IncidentReport.Severity.CRITICAL
+                ).count(),
+                "active_restrictions": AccountRestriction.objects.filter(
+                    status=AccountRestriction.Status.ACTIVE
+                ).count(),
+                "active_risk_entries": RiskRegisterEntry.objects.filter(is_active=True).count(),
+            }
+        )
+
+
+class AdminModerationIncidentListView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanModeratePlatform]
+    serializer_class = AdminIncidentReportSerializer
+
+    def get_queryset(self):
+        queryset = (
+            IncidentReport.objects.select_related(
+                "booking",
+                "booking__professional",
+                "resolved_by",
+            )
+            .prefetch_related("decisions", "restrictions", "evidences")
+            .order_by("-created_at")
+        )
+        for param in ("status", "severity", "category", "reported_party_type", "reporter_type"):
+            value = self.request.query_params.get(param)
+            if value:
+                queryset = queryset.filter(**{param: value})
+        q = self.request.query_params.get("q", "").strip()
+        if q:
+            queryset = queryset.filter(
+                Q(description__icontains=q)
+                | Q(category__icontains=q)
+                | Q(booking__client_email__icontains=q)
+                | Q(booking__professional__business_name__icontains=q)
+            )
+        return queryset
+
+
+class AdminModerationIncidentDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanModeratePlatform]
+
+    def get_object(self, pk):
+        return generics.get_object_or_404(
+            IncidentReport.objects.select_related(
+                "booking",
+                "booking__professional",
+                "resolved_by",
+            ).prefetch_related("decisions", "restrictions", "evidences"),
+            pk=pk,
+        )
+
+    def get(self, request, pk):
+        incident = self.get_object(pk)
+        return Response(AdminIncidentReportSerializer(incident).data)
+
+    def patch(self, request, pk):
+        incident = self.get_object(pk)
+        allowed_fields = {"status", "severity", "admin_notes"}
+        for field in allowed_fields:
+            if field in request.data:
+                setattr(incident, field, request.data.get(field))
+        incident.save(update_fields=list(allowed_fields & set(request.data.keys())) + ["updated_at"])
+        return Response(AdminIncidentReportSerializer(incident).data)
+
+
+def _create_restriction_from_incident(*, incident: IncidentReport, decision_type: str, notes: str, duration_days: int | None, actor):
+    booking = incident.booking
+    subject_type = None
+    restriction_type = None
+    restriction_kwargs = {
+        "incident": incident,
+        "reason": incident.category[:220],
+        "notes": notes,
+        "created_by": actor,
+    }
+
+    if incident.reported_party_type == IncidentReport.ReportedPartyType.PRACTITIONER:
+        subject_type = AccountRestriction.SubjectType.PRACTITIONER
+        restriction_kwargs["professional"] = booking.professional
+        restriction_kwargs["user"] = booking.professional.user
+        if decision_type == "warn":
+            restriction_type = AccountRestriction.RestrictionType.WARNING
+            risk_level = RiskRegisterEntry.RiskLevel.LOW
+            trust_status = RiskRegisterEntry.PractitionerTrustStatus.WATCH
+        elif decision_type == "restrict":
+            restriction_type = AccountRestriction.RestrictionType.PAYOUT_SUSPENDED
+            risk_level = RiskRegisterEntry.RiskLevel.HIGH
+            trust_status = RiskRegisterEntry.PractitionerTrustStatus.RESTRICTED
+        elif decision_type == "suspend":
+            restriction_type = AccountRestriction.RestrictionType.ACCOUNT_SUSPENDED
+            risk_level = RiskRegisterEntry.RiskLevel.HIGH
+            trust_status = RiskRegisterEntry.PractitionerTrustStatus.SUSPENDED
+            booking.professional.accepts_online_booking = False
+            booking.professional.verification_badge_status = booking.professional.VerificationBadgeStatus.SUSPENDED
+            booking.professional.save(update_fields=["accepts_online_booking", "verification_badge_status", "updated_at"])
+        else:
+            restriction_type = AccountRestriction.RestrictionType.BANNED
+            risk_level = RiskRegisterEntry.RiskLevel.BLOCKED
+            trust_status = RiskRegisterEntry.PractitionerTrustStatus.SUSPENDED
+            booking.professional.accepts_online_booking = False
+            booking.professional.is_public = False
+            booking.professional.verification_badge_status = booking.professional.VerificationBadgeStatus.SUSPENDED
+            booking.professional.save(
+                update_fields=[
+                    "accepts_online_booking",
+                    "is_public",
+                    "verification_badge_status",
+                    "updated_at",
+                ]
+            )
+            if booking.professional.user_id:
+                booking.professional.user.is_active = False
+                booking.professional.user.save(update_fields=["is_active"])
+
+        RiskRegisterEntry.objects.create(
+            subject_type=RiskRegisterEntry.SubjectType.PRACTITIONER,
+            professional=booking.professional,
+            booking=booking,
+            risk_level=risk_level,
+            practitioner_trust_status=trust_status,
+            reason=incident.category[:220],
+            details=notes,
+            reviewed_by=actor,
+            reviewed_at=timezone.now(),
+            expires_at=timezone.now() + dt.timedelta(days=duration_days) if duration_days else None,
+        )
+    else:
+        subject_type = AccountRestriction.SubjectType.CLIENT_EMAIL
+        restriction_kwargs["client_email"] = booking.client_email
+        restriction_kwargs["client_phone"] = booking.client_phone
+        if decision_type == "warn":
+            restriction_type = AccountRestriction.RestrictionType.WARNING
+            risk_level = RiskRegisterEntry.RiskLevel.LOW
+            booking_status = RiskRegisterEntry.BookingRestrictionStatus.NONE
+        elif decision_type == "restrict":
+            restriction_type = AccountRestriction.RestrictionType.BOOKING_REVIEW
+            risk_level = RiskRegisterEntry.RiskLevel.MEDIUM
+            booking_status = RiskRegisterEntry.BookingRestrictionStatus.REVIEW_REQUIRED
+        elif decision_type == "suspend":
+            restriction_type = AccountRestriction.RestrictionType.BOOKING_BLOCKED
+            risk_level = RiskRegisterEntry.RiskLevel.HIGH
+            booking_status = RiskRegisterEntry.BookingRestrictionStatus.BLOCKED
+        else:
+            restriction_type = AccountRestriction.RestrictionType.BANNED
+            risk_level = RiskRegisterEntry.RiskLevel.BLOCKED
+            booking_status = RiskRegisterEntry.BookingRestrictionStatus.BLOCKED
+
+        RiskRegisterEntry.objects.create(
+            subject_type=RiskRegisterEntry.SubjectType.CLIENT_EMAIL,
+            booking=booking,
+            client_email=booking.client_email,
+            client_phone=booking.client_phone,
+            risk_level=risk_level,
+            booking_restriction_status=booking_status,
+            reason=incident.category[:220],
+            details=notes,
+            reviewed_by=actor,
+            reviewed_at=timezone.now(),
+            expires_at=timezone.now() + dt.timedelta(days=duration_days) if duration_days else None,
+        )
+
+    restriction = AccountRestriction.objects.create(
+        subject_type=subject_type,
+        restriction_type=restriction_type,
+        ends_at=timezone.now() + dt.timedelta(days=duration_days) if duration_days else None,
+        **restriction_kwargs,
+    )
+    return restriction
+
+
+class AdminModerationIncidentDecisionView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanManageRestrictions]
+
+    def post(self, request, pk):
+        incident = generics.get_object_or_404(IncidentReport, pk=pk)
+        serializer = IncidentDecisionAdminSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        decision_type = serializer.validated_data["decision_type"]
+        notes = serializer.validated_data.get("notes", "")
+        duration_days = serializer.validated_data.get("duration_days")
+
+        decision = IncidentDecision.objects.create(
+            incident=incident,
+            decision_type=decision_type,
+            notes=notes,
+            created_by=request.user,
+        )
+
+        restriction = None
+        if decision_type == "dismiss":
+            incident.status = IncidentReport.Status.REJECTED
+            incident.payout_frozen = False
+            incident.resolution = "Classé sans suite"
+        else:
+            incident.status = IncidentReport.Status.RESOLVED
+            incident.resolution = decision.get_decision_type_display() if hasattr(decision, "get_decision_type_display") else decision_type
+            restriction = _create_restriction_from_incident(
+                incident=incident,
+                decision_type=decision_type,
+                notes=notes,
+                duration_days=duration_days,
+                actor=request.user,
+            )
+        incident.admin_notes = notes
+        incident.resolved_by = request.user
+        incident.resolved_at = timezone.now()
+        incident.save(
+            update_fields=[
+                "status",
+                "payout_frozen",
+                "resolution",
+                "admin_notes",
+                "resolved_by",
+                "resolved_at",
+                "updated_at",
+            ]
+        )
+
+        return Response(
+            {
+                "incident": AdminIncidentReportSerializer(incident).data,
+                "decision_id": str(decision.id),
+                "restriction": AccountRestrictionSerializer(restriction).data if restriction else None,
+            }
+        )
+
+
+class AdminModerationRestrictionsView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanModeratePlatform]
+    serializer_class = AccountRestrictionSerializer
+
+    def get_queryset(self):
+        queryset = AccountRestriction.objects.select_related(
+            "professional",
+            "user",
+            "created_by",
+            "revoked_by",
+            "incident",
+        ).order_by("-created_at")
+        for param in ("status", "restriction_type", "subject_type"):
+            value = self.request.query_params.get(param)
+            if value:
+                queryset = queryset.filter(**{param: value})
+        return queryset
+
+
+class AdminModerationRiskEntriesView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanModeratePlatform]
+    serializer_class = RiskRegisterEntrySerializer
+
+    def get_queryset(self):
+        queryset = RiskRegisterEntry.objects.select_related(
+            "professional",
+            "booking",
+            "reviewed_by",
+        ).order_by("-created_at")
+        is_active = self.request.query_params.get("is_active")
+        if is_active in {"true", "false"}:
+            queryset = queryset.filter(is_active=is_active == "true")
+        risk_level = self.request.query_params.get("risk_level")
+        if risk_level:
+            queryset = queryset.filter(risk_level=risk_level)
+        return queryset
 
 
 class ProfessionalAvailabilityViewSet(viewsets.ModelViewSet):

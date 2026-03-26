@@ -75,6 +75,101 @@ Règles :
 - aucun faux email de réservation ou faux lead
 - seuls les templates honnêtes sont utilisés
 
+## Pilotage ville par ville
+
+Le cockpit `/ops` expose maintenant une section `Villes / Croissance`.
+
+Le modèle central est `CityGrowthPlan` :
+- `city_label`
+- `city_slug`
+- `department_code`
+- `region`
+- `objective_profiles_total`
+- `objective_claimed_profiles`
+- `objective_active_profiles`
+- `priority_level`
+- `growth_status`
+- `notes_internal`
+- `is_active`
+
+Defaults backend :
+- `NUADYX_CITY_OBJECTIVE_DEFAULT=10`
+- `NUADYX_CITY_OBJECTIVE_CLAIMED_DEFAULT=4`
+- `NUADYX_CITY_OBJECTIVE_ACTIVE_DEFAULT=3`
+
+Statuts de croissance :
+- `empty`
+- `seed`
+- `building`
+- `healthy`
+- `saturated`
+- `deprioritized`
+
+Lecture recommandée :
+- `coverage_percent` = progression vers l’objectif profils total
+- `claim_rate` = claims validés / contacts envoyés
+- `suggestions_unprocessed_count` = backlog local à traiter
+- `recommended_action` = synthèse courte affichée dans le cockpit
+
+Définition actuelle des métriques ville :
+- `total_profiles` = `claimed_profiles + unclaimed_profiles + profiles_in_review`
+- `claimed_profiles` = profils praticiens revendiqués rattachés à la ville
+- `unclaimed_profiles` = fiches importées publiées non revendiquées
+- `active_profiles` = profils publics actuellement visibles
+- `suggestions_count` = suggestions publiques reçues pour la ville, traitées ou non
+- `suggestions_unprocessed_count` = suggestions encore non traitées
+- `campaigns_count` = campagnes ciblant ou couvrant la ville
+- `contacts_sent` = messages envoyés aux fiches importées de la ville
+- `claims_opened` = claims ayant réellement démarré, y compris les claims approuvés
+- `claims_validated` = claims approuvés
+
+Ce qui est calculé à la volée :
+- la couverture ville
+- le funnel local
+- les recommandations
+- le rattachement des profils importés / suggestions / campagnes à une ville
+
+Ce qui pourra nécessiter un cache ou une agrégation plus tard :
+- `list_city_growth_rows()` sur gros volume
+- `get_city_funnel()` si `/ops` interroge beaucoup de villes en parallèle
+- les vues locales profils/suggestions/campagnes si le volume devient élevé
+
+Champs géographiques praticiens :
+- `ProfessionalProfile` porte maintenant `postal_code`, `department_code`, `region`
+- ils sont hydratés à la revendication d’une fiche importée
+- ils sont aussi complétés lors de l’édition du profil praticien quand la ville / code postal matche `LocationIndex`
+- à finir côté produit : rendre ces champs plus visibles dans l’UI praticien si on veut une édition géographique explicite
+
+Funnel local :
+- suggestions reçues
+- suggestions non traitées
+- profils importés
+- profils en review
+- profils publiés non revendiqués
+- invitations envoyées
+- claims ouverts
+- claims validés
+- profils revendiqués
+- profils publics actifs
+
+Endpoints utiles :
+- `GET /api/admin/acquisition/cities`
+- `POST /api/admin/acquisition/cities`
+- `GET /api/admin/acquisition/cities/:city_slug`
+- `PATCH /api/admin/acquisition/cities/:city_slug`
+- `GET /api/admin/acquisition/cities/:city_slug/funnel`
+- `GET /api/admin/acquisition/cities/:city_slug/profiles`
+- `GET /api/admin/acquisition/cities/:city_slug/suggestions`
+- `GET /api/admin/acquisition/cities/:city_slug/campaigns`
+
+Usage simple :
+1. ajouter une ville au cockpit via le référentiel France
+2. régler l’objectif local
+3. lire la couverture et le funnel
+4. traiter les suggestions locales
+5. publier / revendiquer les fiches pertinentes
+6. lancer une campagne ciblée ville si nécessaire
+
 ## Traiter une demande de suppression
 
 Entrée publique :

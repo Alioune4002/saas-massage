@@ -38,7 +38,7 @@ export function SiteFooter() {
           </p>
           <div className="mt-3 space-y-2 text-sm text-[var(--foreground-muted)]">
             <Link
-              href="/praticiens"
+              href="/trouver-un-praticien"
               className="block transition hover:text-[var(--foreground)]"
             >
               Trouver un praticien

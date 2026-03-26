@@ -1,11 +1,15 @@
 from django.contrib import admin
 
 from .models import (
+    AccountRestriction,
     AvailabilitySlot,
     Booking,
     BookingEventLog,
     BookingPayment,
+    IncidentDecision,
+    IncidentReport,
     PaymentWebhookEventLog,
+    RiskRegisterEntry,
     TrustedClient,
 )
 
@@ -99,3 +103,34 @@ class PaymentWebhookEventLogAdmin(admin.ModelAdmin):
     search_fields = ("provider_event_id", "event_type", "booking__client_email")
     ordering = ("-created_at",)
     readonly_fields = ("payload",)
+
+
+@admin.register(IncidentReport)
+class IncidentReportAdmin(admin.ModelAdmin):
+    list_display = ("booking", "category", "status", "severity", "payout_frozen", "created_at")
+    list_filter = ("status", "severity", "reported_party_type", "reporter_type")
+    search_fields = ("booking__client_email", "booking__professional__business_name", "category", "description")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(IncidentDecision)
+class IncidentDecisionAdmin(admin.ModelAdmin):
+    list_display = ("incident", "decision_type", "amount_eur", "created_by", "created_at")
+    list_filter = ("decision_type",)
+    search_fields = ("incident__booking__client_email", "notes")
+
+
+@admin.register(RiskRegisterEntry)
+class RiskRegisterEntryAdmin(admin.ModelAdmin):
+    list_display = ("subject_type", "professional", "client_email", "risk_level", "is_active", "created_at")
+    list_filter = ("subject_type", "risk_level", "is_active")
+    search_fields = ("professional__business_name", "client_email", "reason")
+    readonly_fields = ("reviewed_at", "resolved_at", "created_at", "updated_at")
+
+
+@admin.register(AccountRestriction)
+class AccountRestrictionAdmin(admin.ModelAdmin):
+    list_display = ("restriction_type", "subject_type", "professional", "client_email", "status", "created_at")
+    list_filter = ("restriction_type", "subject_type", "status")
+    search_fields = ("professional__business_name", "client_email", "reason")
+    readonly_fields = ("revoked_at", "created_at", "updated_at")

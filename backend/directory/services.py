@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 
+from django.db.models import Q
 from django.utils import timezone
 
 from common.communications import (
@@ -11,6 +12,7 @@ from common.communications import (
     send_directory_removal_confirmation_email,
 )
 from directory.importers import CSVImporter, JsonFeedImporter
+from professionals.models import LocationIndex
 from directory.models import (
     AuditLog,
     ContactCampaign,
@@ -203,9 +205,40 @@ def build_campaign_targets(*, campaign: ContactCampaign):
     )
     if campaign.source_id:
         targets = targets.filter(source=campaign.source)
-    city = campaign.audience_filter_json.get("city")
+    city = campaign.city or campaign.audience_filter_json.get("city")
     if city:
         targets = targets.filter(city__icontains=city)
+    department_code = campaign.department_code or campaign.audience_filter_json.get("department_code")
+    if department_code:
+        department_rows = LocationIndex.objects.filter(
+            is_active=True,
+            location_type=LocationIndex.LocationType.CITY,
+            department_code=department_code,
+        )
+        targets = targets.filter(
+            Q(city__in=department_rows.values_list("city", flat=True))
+            | Q(postal_code__in=department_rows.values_list("postal_code", flat=True))
+        )
+    region = campaign.region or campaign.audience_filter_json.get("region")
+    if region:
+        region_rows = LocationIndex.objects.filter(
+            is_active=True,
+            location_type=LocationIndex.LocationType.CITY,
+            region=region,
+        )
+        targets = targets.filter(
+            Q(region__icontains=region)
+            | Q(city__in=region_rows.values_list("city", flat=True))
+            | Q(postal_code__in=region_rows.values_list("postal_code", flat=True))
+        )
+    if campaign.campaign_scope_type == ContactCampaign.ScopeType.CITY and campaign.campaign_scope_value and not city:
+        city_location = LocationIndex.objects.filter(
+            is_active=True,
+            location_type=LocationIndex.LocationType.CITY,
+            slug=campaign.campaign_scope_value,
+        ).first()
+        if city_location:
+            targets = targets.filter(city__iexact=city_location.city)
     return targets
 
 

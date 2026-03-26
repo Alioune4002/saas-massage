@@ -7,11 +7,13 @@ from rest_framework.authtoken.models import Token
 
 from common.legal import LEGAL_DOCUMENTS, get_required_practitioner_registration_documents
 from common.models import LegalAcceptanceRecord
-from professionals.models import ProfessionalProfile
+from professionals.crm import resolve_profile_geography
+from professionals.models import LocationIndex, ProfessionalProfile
 from professionals.serializers import PublicProfessionalSerializer
 
 from .models import (
     AuditLog,
+    CityGrowthPlan,
     ContactCampaign,
     ContactMessageLog,
     ImportedProfile,
@@ -236,6 +238,11 @@ class ContactCampaignSerializer(serializers.ModelSerializer):
             "source",
             "campaign_type",
             "status",
+            "campaign_scope_type",
+            "campaign_scope_value",
+            "city",
+            "department_code",
+            "region",
             "audience_filter_json",
             "email_template_key",
             "created_by",
@@ -259,6 +266,133 @@ class ContactCampaignSerializer(serializers.ModelSerializer):
 
     def get_approved_by_email(self, obj):
         return getattr(obj.approved_by, "email", "")
+
+    def validate(self, attrs):
+        audience = dict(attrs.get("audience_filter_json") or {})
+        attrs["city"] = attrs.get("city") or str(audience.get("city") or "").strip()
+        attrs["department_code"] = attrs.get("department_code") or str(audience.get("department_code") or "").strip().upper()
+        attrs["region"] = attrs.get("region") or str(audience.get("region") or "").strip()
+        location_slug = str(
+            attrs.get("campaign_scope_value")
+            or audience.get("city_slug")
+            or ""
+        ).strip()
+
+        if attrs.get("city") and not attrs.get("campaign_scope_type"):
+            attrs["campaign_scope_type"] = ContactCampaign.ScopeType.CITY
+        if attrs.get("campaign_scope_type") == ContactCampaign.ScopeType.CITY:
+            if not location_slug and attrs.get("city"):
+                location = (
+                    LocationIndex.objects.filter(
+                        is_active=True,
+                        location_type=LocationIndex.LocationType.CITY,
+                        city__iexact=attrs["city"],
+                    )
+                    .order_by("-priority", "label")
+                    .first()
+                )
+                location_slug = location.slug if location else attrs["city"]
+            attrs["campaign_scope_value"] = location_slug or attrs.get("campaign_scope_value") or attrs.get("city", "")
+        return attrs
+
+
+class CityGrowthPlanSerializer(serializers.ModelSerializer):
+    location_slug = serializers.CharField(write_only=True, required=False)
+
+    class Meta:
+        model = CityGrowthPlan
+        fields = (
+            "id",
+            "location",
+            "location_slug",
+            "city_label",
+            "city_slug",
+            "department_code",
+            "region",
+            "objective_profiles_total",
+            "objective_claimed_profiles",
+            "objective_active_profiles",
+            "priority_level",
+            "growth_status",
+            "notes_internal",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "location",
+            "city_label",
+            "city_slug",
+            "department_code",
+            "region",
+            "created_at",
+            "updated_at",
+        )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance is None:
+            location_slug = str(attrs.pop("location_slug", "")).strip()
+            if not location_slug:
+                raise serializers.ValidationError({"location_slug": "Le slug ville est requis."})
+            location = (
+                LocationIndex.objects.filter(
+                    is_active=True,
+                    location_type=LocationIndex.LocationType.CITY,
+                    slug=location_slug,
+                )
+                .order_by("-priority", "label")
+                .first()
+            )
+            if not location:
+                raise serializers.ValidationError({"location_slug": "Ville introuvable dans le référentiel."})
+            attrs["location"] = location
+        return attrs
+
+
+class CityAcquisitionSummarySerializer(serializers.Serializer):
+    plan_id = serializers.CharField(allow_blank=True)
+    city_label = serializers.CharField()
+    city_slug = serializers.CharField()
+    department_code = serializers.CharField(allow_blank=True)
+    region = serializers.CharField(allow_blank=True)
+    objective_profiles_total = serializers.IntegerField()
+    objective_claimed_profiles = serializers.IntegerField()
+    objective_active_profiles = serializers.IntegerField()
+    priority_level = serializers.CharField()
+    growth_status = serializers.CharField()
+    computed_growth_status = serializers.CharField()
+    is_active = serializers.BooleanField()
+    total_profiles = serializers.IntegerField()
+    claimed_profiles = serializers.IntegerField()
+    unclaimed_profiles = serializers.IntegerField()
+    active_profiles = serializers.IntegerField()
+    suggestions_count = serializers.IntegerField()
+    suggestions_unprocessed_count = serializers.IntegerField()
+    campaigns_count = serializers.IntegerField()
+    contacts_sent = serializers.IntegerField()
+    claims_opened = serializers.IntegerField()
+    claims_validated = serializers.IntegerField()
+    claim_rate = serializers.FloatField()
+    coverage_percent = serializers.FloatField()
+    recommended_action = serializers.CharField()
+    recommendations = serializers.ListField(child=serializers.CharField())
+    notes_internal = serializers.CharField(allow_blank=True)
+
+
+class CityAcquisitionFunnelSerializer(serializers.Serializer):
+    city_label = serializers.CharField()
+    city_slug = serializers.CharField()
+    suggestions_received = serializers.IntegerField()
+    suggestions_unprocessed = serializers.IntegerField()
+    profiles_imported = serializers.IntegerField()
+    profiles_in_review = serializers.IntegerField()
+    profiles_published_unclaimed = serializers.IntegerField()
+    invitations_sent = serializers.IntegerField()
+    claims_opened = serializers.IntegerField()
+    claims_validated = serializers.IntegerField()
+    profiles_claimed = serializers.IntegerField()
+    profiles_public_active = serializers.IntegerField()
 
 
 class ContactMessageLogSerializer(serializers.ModelSerializer):
@@ -471,7 +605,9 @@ class ClaimCompleteOnboardingSerializer(serializers.Serializer):
                 "business_name": self.validated_data.get("business_name") or imported_profile.business_name or imported_profile.public_name,
                 "slug": imported_profile.slug,
                 "city": imported_profile.city,
+                "postal_code": imported_profile.postal_code,
                 "service_area": imported_profile.region,
+                "region": imported_profile.region,
                 "bio": imported_profile.bio_short,
                 "public_headline": imported_profile.public_status_note,
                 "specialties": imported_profile.service_tags_json,
@@ -488,7 +624,9 @@ class ClaimCompleteOnboardingSerializer(serializers.Serializer):
         if not _created:
             profile.business_name = self.validated_data.get("business_name") or profile.business_name or imported_profile.business_name or imported_profile.public_name
             profile.city = profile.city or imported_profile.city
+            profile.postal_code = profile.postal_code or imported_profile.postal_code
             profile.service_area = profile.service_area or imported_profile.region
+            profile.region = profile.region or imported_profile.region
             profile.bio = profile.bio or imported_profile.bio_short
             profile.public_headline = profile.public_headline or imported_profile.public_status_note
             profile.specialties = profile.specialties or imported_profile.service_tags_json
@@ -497,7 +635,18 @@ class ClaimCompleteOnboardingSerializer(serializers.Serializer):
             profile.profile_claimed_from_import = True
             profile.imported_profile_origin = imported_profile
             profile.acquisition_source = ProfessionalProfile.AcquisitionSource.IMPORTED_CLAIMED
-            profile.save()
+        location = resolve_profile_geography(
+            city=profile.city,
+            postal_code=profile.postal_code,
+            department_code=profile.department_code,
+            region=profile.region or profile.service_area,
+        )
+        if location:
+            profile.city = location.city or profile.city
+            profile.postal_code = location.postal_code or profile.postal_code
+            profile.department_code = location.department_code or profile.department_code
+            profile.region = location.region or profile.region or profile.service_area
+        profile.save()
 
         imported_profile.import_status = ImportedProfile.ImportStatus.CLAIMED
         imported_profile.is_public = False

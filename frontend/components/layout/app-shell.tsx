@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { NuadyxLogo } from "@/components/brand/nuadyx-logo";
+import { PlatformNotices } from "@/components/layout/platform-notices";
 import { useBackendStatus } from "@/components/providers/backend-status-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -115,6 +116,7 @@ function AppShellLoading() {
         </div>
 
         <div className="min-w-0 flex-1 space-y-4">
+          <PlatformNotices />
           <div className="glass-panel rounded-[2rem] p-5">
             <div className="flex items-center justify-between gap-4">
               <Skeleton className="h-12 w-48 rounded-2xl" />

@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { DirectoryListingGrid } from "@/components/directory/directory-listing-grid";
 import { LocationAutosuggest } from "@/components/directory/location-autosuggest";
-import { LaunchInterestForm } from "@/components/marketing/launch-interest-form";
+import { SiteHeader } from "@/components/marketing/site-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -71,7 +71,9 @@ export function DirectoryBrowserPage({
   }, [city, locationSlug, locationType, query]);
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10">
+    <main className="px-4 py-4 md:px-6">
+      <SiteHeader mode="client" />
+      <div className="mx-auto max-w-7xl py-4 md:py-6">
       <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
         <Card className="rounded-[1.9rem] p-6 md:p-8">
           <Badge tone="info">Annuaire NUADYX</Badge>
@@ -130,19 +132,53 @@ export function DirectoryBrowserPage({
         <DirectoryListingGrid items={items} loading={loading} />
       </section>
 
-      <section className="mt-8 grid gap-4 xl:grid-cols-2">
-        <LaunchInterestForm
-          kind="suggest_practitioner"
-          title="Suggérer un praticien"
-          description="Conseillez un praticien à ajouter à l’annuaire. La suggestion part en revue interne avant toute action."
-        />
-        <LaunchInterestForm
-          kind="recommend_masseur"
-          title="Recommander mon masseur"
-          description="Aidez-nous à mieux couvrir votre ville sans créer automatiquement de fiche publique."
-          practitionerLabel="Nom du masseur recommandé"
-        />
+      <section className="mt-8 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="rounded-[1.8rem] p-6">
+          <p className="text-xs uppercase tracking-[0.32em] text-[var(--primary)]/80">
+            Besoin d’aide pour découvrir l’offre locale ?
+          </p>
+          <h2 className="mt-4 text-3xl font-semibold text-[var(--foreground)]">
+            Une entrée client plus simple
+          </h2>
+          <p className="mt-4 text-sm leading-7 text-[var(--foreground-muted)]">
+            Si vous cherchez d’abord une ville, si vous voulez recommander un praticien
+            ou suivre l’ouverture dans votre zone, utilisez l’entrée client dédiée.
+          </p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <Link href="/trouver-un-praticien">
+              <Button size="lg">Trouver un praticien</Button>
+            </Link>
+            <Link href="/favoris">
+              <Button size="lg" variant="secondary">
+                Voir mes favoris
+              </Button>
+            </Link>
+          </div>
+        </Card>
+        <Card className="rounded-[1.8rem] p-6">
+          <p className="text-xs uppercase tracking-[0.32em] text-[var(--primary)]/80">
+            Praticien
+          </p>
+          <h2 className="mt-4 text-3xl font-semibold text-[var(--foreground)]">
+            Votre page publique peut ressembler à un mini site
+          </h2>
+          <p className="mt-4 text-sm leading-7 text-[var(--foreground-muted)]">
+            Présentation, soins, créneaux, photos, avis et réservation au même endroit.
+            Rejoignez NUADYX pour créer votre page ou revendiquer une fiche existante.
+          </p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <Link href="/inscription">
+              <Button size="lg">Créer ma page praticien</Button>
+            </Link>
+            <Link href="/revendiquer">
+              <Button size="lg" variant="secondary">
+                Revendiquer une fiche
+              </Button>
+            </Link>
+          </div>
+        </Card>
       </section>
+      </div>
     </main>
   );
 }

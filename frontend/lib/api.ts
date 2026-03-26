@@ -298,9 +298,205 @@ export type MeResponse = {
   first_name: string;
   last_name: string;
   role: string;
+  admin_capabilities: {
+    ops?: boolean;
+    moderation?: boolean;
+    support?: boolean;
+    analytics?: boolean;
+    super_admin?: boolean;
+  };
   onboarding_completed: boolean;
   professional_slug: string;
   professional_name: string;
+};
+
+export type AdminSupportUser = {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: "admin" | "professional";
+  is_active: boolean;
+  professional_slug: string;
+  professional_name: string;
+  date_joined: string;
+};
+
+export type PlatformMessageRecord = {
+  id: string;
+  recipient_user: string;
+  recipient_email: string;
+  recipient_name: string;
+  category: "support" | "billing" | "moderation" | "product" | "system";
+  title: string;
+  body: string;
+  display_mode: "inbox" | "notice" | "popup";
+  reply_allowed: boolean;
+  is_read: boolean;
+  is_active: boolean;
+  sent_at: string;
+  read_at: string | null;
+  created_by: string | null;
+  created_by_email: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AdminAnnouncementRecord = {
+  id: string;
+  title: string;
+  body: string;
+  audience_role: "all" | "professional" | "admin";
+  display_mode: "notice" | "popup";
+  is_active: boolean;
+  starts_at: string;
+  ends_at: string | null;
+  created_by: string | null;
+  created_by_email: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type MyPlatformMessagesResponse = {
+  messages: Array<{
+    id: string;
+    category: "support" | "billing" | "moderation" | "product" | "system";
+    title: string;
+    body: string;
+    display_mode: "inbox" | "notice" | "popup";
+    reply_allowed: boolean;
+    is_read: boolean;
+    is_active: boolean;
+    sent_at: string;
+    read_at: string | null;
+  }>;
+  announcements: AdminAnnouncementRecord[];
+};
+
+export type ModerationIncidentRecord = {
+  id: string;
+  booking_id: string;
+  reporter_type: "client" | "practitioner" | "admin" | "system";
+  reported_party_type: "client" | "practitioner" | "platform" | "unknown";
+  professional_name: string;
+  client_name: string;
+  client_email: string;
+  category: string;
+  description: string;
+  status: "open" | "in_review" | "resolved" | "rejected";
+  severity: "low" | "medium" | "high" | "critical";
+  payout_frozen: boolean;
+  admin_notes: string;
+  resolution: string;
+  resolved_at: string | null;
+  created_at: string;
+  evidences_count: number;
+  restrictions: RestrictionRecord[];
+  decisions: Array<{
+    id: string;
+    decision_type: string;
+    notes: string;
+    amount_eur: string;
+    created_at: string;
+    created_by_email: string;
+  }>;
+};
+
+export type RestrictionRecord = {
+  id: string;
+  incident: string | null;
+  subject_type: "practitioner" | "client_email" | "client_phone" | "user";
+  user: string | null;
+  professional: string | null;
+  professional_name: string;
+  client_email: string;
+  client_phone: string;
+  restriction_type:
+    | "warning"
+    | "booking_review"
+    | "booking_blocked"
+    | "payout_suspended"
+    | "account_suspended"
+    | "banned";
+  status: "active" | "expired" | "revoked";
+  reason: string;
+  notes: string;
+  starts_at: string;
+  ends_at: string | null;
+  created_by: string | null;
+  created_by_email: string;
+  revoked_by: string | null;
+  revoked_by_email: string;
+  revoked_at: string | null;
+  created_at: string;
+};
+
+export type RiskEntryRecord = {
+  id: string;
+  subject_type: "practitioner" | "client_email" | "client_phone";
+  professional: string | null;
+  professional_name: string;
+  booking: string | null;
+  client_email: string;
+  client_phone: string;
+  risk_level: "none" | "low" | "medium" | "high" | "blocked";
+  booking_restriction_status: "none" | "review_required" | "blocked";
+  practitioner_trust_status: "none" | "watch" | "restricted" | "suspended";
+  reason: string;
+  details: string;
+  is_active: boolean;
+  reviewed_by: string | null;
+  reviewed_by_email: string;
+  reviewed_at: string | null;
+  expires_at: string | null;
+  resolved_at: string | null;
+  created_at: string;
+};
+
+export type ModerationOverview = {
+  open_incidents: number;
+  in_review_incidents: number;
+  critical_incidents: number;
+  active_restrictions: number;
+  active_risk_entries: number;
+};
+
+export type AdminAnalyticsOverview = {
+  snapshot_at: string;
+  kpis: Record<string, number>;
+  ratios: Record<string, number>;
+  tracking_notes: Record<string, string>;
+  top_cities: Array<{
+    city_slug: string;
+    city_label: string;
+    coverage_percent: number;
+    claimed_profiles: number;
+    active_profiles: number;
+    priority_level: "low" | "medium" | "high" | "critical";
+    recommended_action: string;
+  }>;
+};
+
+export type DashboardProfileRankingSignals = {
+  services_count: number;
+  open_slots_count: number;
+  reviews_count: number;
+  bookings_count: number;
+  completed_bookings_count: number;
+  low_quality_signals: number;
+  verification_badge_status: "none" | "pending" | "verified" | "suspended" | "expired";
+  accepts_online_booking: boolean;
+  completeness_signals: {
+    bio: boolean;
+    headline: boolean;
+    city: boolean;
+    photos: boolean;
+    services: boolean;
+    availabilities: boolean;
+    specialties: boolean;
+    contact: boolean;
+    booking_rules: boolean;
+  };
 };
 
 export type DashboardProfile = {
@@ -341,6 +537,9 @@ export type DashboardProfile = {
   payment_message: string;
   payment_account: PaymentAccount | null;
   verification: PractitionerVerification;
+  profile_completeness_score: number;
+  profile_visibility_score: number;
+  ranking_signals: DashboardProfileRankingSignals;
   profile_photo_url: string;
   cover_photo_url: string;
   onboarding_step:
@@ -574,6 +773,11 @@ export type ContactCampaignRecord = {
   source: string | null;
   campaign_type: "claim_invite" | "incomplete_profile_nudge" | "source_recontact";
   status: "draft" | "ready" | "sending" | "paused" | "completed" | "cancelled";
+  campaign_scope_type: "global" | "city" | "department" | "region" | "source";
+  campaign_scope_value: string;
+  city: string;
+  department_code: string;
+  region: string;
   audience_filter_json: Record<string, unknown>;
   email_template_key: string;
   created_by_email: string;
@@ -1178,17 +1382,60 @@ export type PractitionerContact = {
 };
 
 export type CityCoverageMetric = {
-  city: string;
-  objective: number;
+  plan_id: string;
+  city_label: string;
+  city_slug: string;
+  department_code: string;
+  region: string;
+  objective_profiles_total: number;
+  objective_claimed_profiles: number;
+  objective_active_profiles: number;
+  priority_level: "low" | "medium" | "high" | "critical";
+  growth_status:
+    | "empty"
+    | "seed"
+    | "building"
+    | "healthy"
+    | "saturated"
+    | "deprioritized";
+  computed_growth_status:
+    | "empty"
+    | "seed"
+    | "building"
+    | "healthy"
+    | "saturated"
+    | "deprioritized";
+  is_active: boolean;
   total_profiles: number;
   claimed_profiles: number;
   unclaimed_profiles: number;
   active_profiles: number;
+  suggestions_count: number;
+  suggestions_unprocessed_count: number;
+  campaigns_count: number;
   contacts_sent: number;
+  claims_opened: number;
+  claims_validated: number;
   claim_rate: number;
-  interest_count: number;
-  coverage_stage: string;
+  coverage_percent: number;
+  recommendations: string[];
   recommended_action: string;
+  notes_internal: string;
+};
+
+export type CityAcquisitionFunnel = {
+  city_label: string;
+  city_slug: string;
+  suggestions_received: number;
+  suggestions_unprocessed: number;
+  profiles_imported: number;
+  profiles_in_review: number;
+  profiles_published_unclaimed: number;
+  invitations_sent: number;
+  claims_opened: number;
+  claims_validated: number;
+  profiles_claimed: number;
+  profiles_public_active: number;
 };
 
 export type DirectoryInterestLeadRecord = {
@@ -1198,9 +1445,17 @@ export type DirectoryInterestLeadRecord = {
   full_name: string;
   email: string;
   city: string;
+  city_slug: string;
+  location_type: "city" | "department" | "region" | "postal_code";
   practitioner_name: string;
   message: string;
   source_page: string;
+  ops_status: "new" | "in_review" | "converted" | "ignored" | "contacted";
+  converted_to_imported_profile: string | null;
+  converted_to_imported_profile_slug: string;
+  assigned_to: string | null;
+  assigned_to_email: string;
+  ops_notes: string;
   processed: boolean;
   created_at: string;
   updated_at: string;
@@ -1235,6 +1490,21 @@ export async function getMe() {
   return apiRequest<MeResponse>("/auth/me/", {
     method: "GET",
     auth: true,
+  });
+}
+
+export async function getMyPlatformMessages() {
+  return apiRequest<MyPlatformMessagesResponse>("/me/platform-messages", {
+    method: "GET",
+    auth: true,
+  });
+}
+
+export async function markPlatformMessageRead(id: string) {
+  return apiRequest<{ id: string }>(`/me/platform-messages/${id}`, {
+    method: "PATCH",
+    auth: true,
+    body: JSON.stringify({ mark_read: true }),
   });
 }
 
@@ -1691,23 +1961,314 @@ export async function getRemovalRequests(status?: string) {
   });
 }
 
-export async function getAdminAcquisitionCoverage(objective = 10) {
+export async function getAdminModerationOverview() {
+  return apiRequest<ModerationOverview>("/admin/moderation/overview", {
+    auth: true,
+  });
+}
+
+export async function getAdminModerationIncidents(filters?: {
+  status?: string;
+  severity?: string;
+  category?: string;
+  reported_party_type?: string;
+  reporter_type?: string;
+  q?: string;
+}) {
+  const params = new URLSearchParams();
+  Object.entries(filters || {}).forEach(([key, value]) => {
+    if (value) {
+      params.set(key, value);
+    }
+  });
+  return apiRequest<ModerationIncidentRecord[]>(
+    `/admin/moderation/incidents${params.toString() ? `?${params.toString()}` : ""}`,
+    { auth: true }
+  );
+}
+
+export async function getAdminModerationIncident(id: string) {
+  return apiRequest<ModerationIncidentRecord>(`/admin/moderation/incidents/${id}`, {
+    auth: true,
+  });
+}
+
+export async function decideAdminModerationIncident(
+  id: string,
+  payload: { decision_type: "dismiss" | "warn" | "restrict" | "suspend" | "ban"; notes?: string; duration_days?: number | null }
+) {
+  return apiRequest<{
+    incident: ModerationIncidentRecord;
+    decision_id: string;
+    restriction: RestrictionRecord | null;
+  }>(`/admin/moderation/incidents/${id}/decide`, {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAdminModerationIncident(
+  id: string,
+  payload: Partial<Pick<ModerationIncidentRecord, "status" | "severity" | "admin_notes">>
+) {
+  return apiRequest<ModerationIncidentRecord>(`/admin/moderation/incidents/${id}`, {
+    method: "PATCH",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAdminModerationRestrictions(filters?: {
+  status?: string;
+  restriction_type?: string;
+  subject_type?: string;
+}) {
+  const params = new URLSearchParams();
+  Object.entries(filters || {}).forEach(([key, value]) => {
+    if (value) {
+      params.set(key, value);
+    }
+  });
+  return apiRequest<RestrictionRecord[]>(
+    `/admin/moderation/restrictions${params.toString() ? `?${params.toString()}` : ""}`,
+    { auth: true }
+  );
+}
+
+export async function getAdminModerationRiskEntries(filters?: {
+  is_active?: boolean;
+  risk_level?: string;
+}) {
+  const params = new URLSearchParams();
+  if (typeof filters?.is_active === "boolean") {
+    params.set("is_active", String(filters.is_active));
+  }
+  if (filters?.risk_level) {
+    params.set("risk_level", filters.risk_level);
+  }
+  return apiRequest<RiskEntryRecord[]>(
+    `/admin/moderation/risk-entries${params.toString() ? `?${params.toString()}` : ""}`,
+    { auth: true }
+  );
+}
+
+export async function getAdminSupportUsers(filters?: { q?: string; role?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.q) {
+    params.set("q", filters.q);
+  }
+  if (filters?.role) {
+    params.set("role", filters.role);
+  }
+  return apiRequest<AdminSupportUser[]>(
+    `/admin/support/users${params.toString() ? `?${params.toString()}` : ""}`,
+    { auth: true }
+  );
+}
+
+export async function getAdminSupportMessages(filters?: {
+  recipient_user?: string;
+  status?: "read" | "unread";
+}) {
+  const params = new URLSearchParams();
+  if (filters?.recipient_user) {
+    params.set("recipient_user", filters.recipient_user);
+  }
+  if (filters?.status) {
+    params.set("status", filters.status);
+  }
+  return apiRequest<PlatformMessageRecord[]>(
+    `/admin/support/messages${params.toString() ? `?${params.toString()}` : ""}`,
+    { auth: true }
+  );
+}
+
+export async function createAdminSupportMessage(payload: {
+  recipient_user: string;
+  category: PlatformMessageRecord["category"];
+  title: string;
+  body: string;
+  display_mode: PlatformMessageRecord["display_mode"];
+  reply_allowed: boolean;
+  is_active?: boolean;
+  metadata?: Record<string, unknown>;
+}) {
+  return apiRequest<PlatformMessageRecord>("/admin/support/messages", {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAdminAnnouncements() {
+  return apiRequest<AdminAnnouncementRecord[]>("/admin/support/announcements", {
+    auth: true,
+  });
+}
+
+export async function createAdminAnnouncement(payload: {
+  title: string;
+  body: string;
+  audience_role: AdminAnnouncementRecord["audience_role"];
+  display_mode: AdminAnnouncementRecord["display_mode"];
+  is_active?: boolean;
+  starts_at?: string;
+  ends_at?: string | null;
+  metadata?: Record<string, unknown>;
+}) {
+  return apiRequest<AdminAnnouncementRecord>("/admin/support/announcements", {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAdminAnalyticsOverview() {
+  return apiRequest<AdminAnalyticsOverview>("/admin/analytics/overview", {
+    auth: true,
+  });
+}
+
+export async function getAdminAcquisitionCities(filters?: {
+  city?: string;
+  department_code?: string;
+  region?: string;
+  growth_status?: CityCoverageMetric["growth_status"];
+  priority_level?: CityCoverageMetric["priority_level"];
+  processed?: boolean;
+}) {
+  const params = new URLSearchParams();
+  Object.entries(filters || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value));
+    }
+  });
   return apiRequest<CityCoverageMetric[]>(
-    `/admin/acquisition/coverage?objective=${objective}`,
+    `/admin/acquisition/cities${params.toString() ? `?${params.toString()}` : ""}`,
     {
       auth: true,
     }
   );
 }
 
+export async function createAdminAcquisitionCity(payload: {
+  location_slug: string;
+  objective_profiles_total?: number;
+  objective_claimed_profiles?: number;
+  objective_active_profiles?: number;
+  priority_level?: CityCoverageMetric["priority_level"];
+  growth_status?: CityCoverageMetric["growth_status"];
+  notes_internal?: string;
+  is_active?: boolean;
+}) {
+  return apiRequest<CityCoverageMetric>("/admin/acquisition/cities", {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAdminAcquisitionCity(citySlug: string) {
+  return apiRequest<CityCoverageMetric>(`/admin/acquisition/cities/${citySlug}`, {
+    auth: true,
+  });
+}
+
+export async function updateAdminAcquisitionCity(
+  citySlug: string,
+  payload: {
+    objective_profiles_total?: number;
+    objective_claimed_profiles?: number;
+    objective_active_profiles?: number;
+    priority_level?: CityCoverageMetric["priority_level"];
+    growth_status?: CityCoverageMetric["growth_status"];
+    notes_internal?: string;
+    is_active?: boolean;
+  }
+) {
+  return apiRequest<CityCoverageMetric>(`/admin/acquisition/cities/${citySlug}`, {
+    method: "PATCH",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAdminAcquisitionCityFunnel(citySlug: string) {
+  return apiRequest<CityAcquisitionFunnel>(
+    `/admin/acquisition/cities/${citySlug}/funnel`,
+    { auth: true }
+  );
+}
+
+export async function getAdminAcquisitionCityProfiles(
+  citySlug: string,
+  filters?: {
+    import_status?: ImportedProfileRecord["import_status"];
+    claimable?: boolean;
+  }
+) {
+  const params = new URLSearchParams();
+  if (filters?.import_status) {
+    params.set("import_status", filters.import_status);
+  }
+  if (typeof filters?.claimable === "boolean") {
+    params.set("claimable", String(filters.claimable));
+  }
+  return apiRequest<ImportedProfileRecord[]>(
+    `/admin/acquisition/cities/${citySlug}/profiles${
+      params.toString() ? `?${params.toString()}` : ""
+    }`,
+    { auth: true }
+  );
+}
+
+export async function getAdminAcquisitionCitySuggestions(
+  citySlug: string,
+  filters?: {
+    processed?: boolean;
+    ops_status?: DirectoryInterestLeadRecord["ops_status"];
+  }
+) {
+  const params = new URLSearchParams();
+  if (typeof filters?.processed === "boolean") {
+    params.set("processed", String(filters.processed));
+  }
+  if (filters?.ops_status) {
+    params.set("ops_status", filters.ops_status);
+  }
+  return apiRequest<DirectoryInterestLeadRecord[]>(
+    `/admin/acquisition/cities/${citySlug}/suggestions${
+      params.toString() ? `?${params.toString()}` : ""
+    }`,
+    { auth: true }
+  );
+}
+
+export async function getAdminAcquisitionCityCampaigns(citySlug: string) {
+  return apiRequest<ContactCampaignRecord[]>(
+    `/admin/acquisition/cities/${citySlug}/campaigns`,
+    { auth: true }
+  );
+}
+
+export async function getAdminAcquisitionCoverage() {
+  return getAdminAcquisitionCities();
+}
+
 export async function getAdminAcquisitionSuggestions(filters?: {
   city?: string;
+  city_slug?: string;
   kind?: DirectoryInterestPayload["kind"];
   processed?: boolean;
+  ops_status?: DirectoryInterestLeadRecord["ops_status"];
 }) {
   const params = new URLSearchParams();
   if (filters?.city) {
     params.set("city", filters.city);
+  }
+  if (filters?.city_slug) {
+    params.set("city_slug", filters.city_slug);
   }
   if (filters?.kind) {
     params.set("kind", filters.kind);
@@ -1715,12 +2276,26 @@ export async function getAdminAcquisitionSuggestions(filters?: {
   if (typeof filters?.processed === "boolean") {
     params.set("processed", String(filters.processed));
   }
+  if (filters?.ops_status) {
+    params.set("ops_status", filters.ops_status);
+  }
   return apiRequest<DirectoryInterestLeadRecord[]>(
     `/admin/acquisition/suggestions${params.toString() ? `?${params.toString()}` : ""}`,
     {
       auth: true,
     }
   );
+}
+
+export async function updateAdminAcquisitionSuggestion(
+  id: string,
+  payload: Partial<DirectoryInterestLeadRecord>
+) {
+  return apiRequest<DirectoryInterestLeadRecord>(`/admin/acquisition/suggestions/${id}`, {
+    method: "PATCH",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getDashboardContacts(filters?: {

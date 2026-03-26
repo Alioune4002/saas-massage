@@ -30,6 +30,56 @@ def normalize_phone(value: str) -> str:
     return "".join(char for char in (value or "") if char.isdigit())
 
 
+def resolve_profile_geography(
+    *,
+    city: str = "",
+    postal_code: str = "",
+    department_code: str = "",
+    region: str = "",
+) -> LocationIndex | None:
+    normalized_city = normalize_text(city)
+    normalized_region = normalize_text(region)
+    normalized_postal_code = (postal_code or "").strip()
+    normalized_department_code = (department_code or "").strip().upper()
+
+    if normalized_city:
+        queryset = LocationIndex.objects.filter(
+            is_active=True,
+            location_type=LocationIndex.LocationType.CITY,
+            city__iexact=city.strip(),
+        )
+        if normalized_postal_code:
+            exact = queryset.filter(postal_code=normalized_postal_code).order_by("-priority", "label").first()
+            if exact:
+                return exact
+        if normalized_department_code:
+            exact = queryset.filter(department_code=normalized_department_code).order_by("-priority", "label").first()
+            if exact:
+                return exact
+        if normalized_region:
+            for candidate in queryset.order_by("-priority", "label"):
+                if normalize_text(candidate.region) == normalized_region:
+                    return candidate
+        single = queryset.order_by("-priority", "label").first()
+        if single and queryset.count() == 1:
+            return single
+
+    if normalized_postal_code:
+        postal_location = (
+            LocationIndex.objects.filter(
+                is_active=True,
+                location_type=LocationIndex.LocationType.CITY,
+                postal_code=normalized_postal_code,
+            )
+            .order_by("-priority", "label")
+            .first()
+        )
+        if postal_location:
+            return postal_location
+
+    return None
+
+
 def _risk_rank(value: str) -> int:
     return {
         RiskRegisterEntry.RiskLevel.NONE: 0,

@@ -1,9 +1,17 @@
 import Link from "next/link";
-import { ArrowRight, Bot, CalendarClock, CheckCircle2, Link2, Search, Star } from "lucide-react";
+import {
+  ArrowRight,
+  Bot,
+  CalendarClock,
+  CheckCircle2,
+  Globe2,
+  Link2,
+  Search,
+  ShieldCheck,
+  Star,
+} from "lucide-react";
 
 import { DashboardPreview } from "@/components/marketing/dashboard-preview";
-import { LocationAutosuggest } from "@/components/directory/location-autosuggest";
-import { LaunchInterestForm } from "@/components/marketing/launch-interest-form";
 import { SiteHeader } from "@/components/marketing/site-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,7 +39,7 @@ const whyJoin = [
   {
     title: "Recevoir des demandes de rendez-vous",
     description:
-      "Vos clients peuvent demander un créneau plus simplement, avec des informations plus lisibles et mieux organisées.",
+      "Vos clients peuvent demander un créneau ou réserver plus simplement, avec des informations plus lisibles et mieux organisées.",
     icon: CalendarClock,
   },
   {
@@ -60,27 +68,50 @@ const setupSteps = [
 const practitionerBenefits = [
   "Vos prestations avec durées et tarifs",
   "Votre présentation et votre univers",
+  "Vos photos et votre ambiance",
   "Vos créneaux disponibles",
   "Vos conditions de réservation",
   "Vos avis clients",
   "Votre lien public partageable",
 ];
 
+const visibilitySignals = [
+  {
+    title: "Un profil complet inspire davantage confiance",
+    description:
+      "Présentation, photos, prestations, créneaux et règles de réservation forment une page plus claire pour les clients.",
+    icon: ShieldCheck,
+  },
+  {
+    title: "L’activité régulière aide à remonter",
+    description:
+      "Les praticiens actifs, fiables et réactifs peuvent être mieux mis en avant dans l’annuaire au fil du temps.",
+    icon: CalendarClock,
+  },
+  {
+    title: "Les premiers inscrits profitent du lancement",
+    description:
+      "Pendant la phase de lancement, les premiers profils bien renseignés gagnent plus facilement en visibilité locale.",
+    icon: Globe2,
+  },
+];
+
 export default function HomePage() {
   return (
     <main className="min-h-screen text-[var(--foreground)]">
-      <SiteHeader />
+      <SiteHeader mode="practitioner" />
 
       <section className="px-4 pb-8 pt-6 md:px-6 md:pb-12 md:pt-10">
         <div className="mx-auto grid max-w-7xl items-center gap-8 lg:grid-cols-[1.02fr_0.98fr] lg:gap-10">
           <div>
-            <Badge tone="info">Annuaire massage & bien-être</Badge>
+            <Badge tone="info">Gratuit pendant le lancement</Badge>
             <h1 className="mt-6 max-w-3xl text-5xl font-semibold leading-[1.02] tracking-tight text-[var(--foreground)] md:text-6xl">
-              L’annuaire des praticiens du massage et du bien-être
+              Votre page praticien sans créer un site
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-[var(--foreground-muted)]">
-              Présentez vos soins, partagez votre page et recevez vos demandes de
-              rendez-vous simplement. Inscription gratuite pendant le lancement.
+              NUADYX vous aide à présenter vos soins, ouvrir vos créneaux, partager
+              un lien public et recevoir vos demandes de rendez-vous dans un cadre
+              clair et rassurant.
             </p>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
@@ -93,18 +124,11 @@ export default function HomePage() {
                   Créer ma page praticien
                 </Button>
               </Link>
-              <Link href="/annuaire" className="w-full">
+              <Link href="/trouver-un-praticien" className="w-full">
                 <Button variant="secondary" size="lg" className="w-full">
-                  Découvrir un exemple
+                  Voir un exemple de page
                 </Button>
               </Link>
-            </div>
-
-            <div className="mt-6 max-w-xl rounded-[1.6rem] border border-[var(--border)] bg-[var(--surface)] p-4">
-              <LocationAutosuggest
-                label="Trouver un praticien près de chez vous"
-                hint="Ville, code postal, département ou région"
-              />
             </div>
 
             <div className="mt-10 grid gap-3 sm:grid-cols-3">
@@ -158,7 +182,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="px-4 py-10 md:px-6 md:py-14">
+      <section id="comment-ca-marche" className="px-4 py-10 md:px-6 md:py-14">
         <div className="mx-auto max-w-7xl">
           <div className="max-w-3xl">
             <p className="text-xs uppercase tracking-[0.32em] text-[var(--primary)]/80">
@@ -197,8 +221,9 @@ export default function HomePage() {
               Une page qui travaille pour vous
             </h2>
             <p className="mt-4 text-sm leading-7 text-[var(--foreground-muted)]">
-              Votre page NUADYX devient votre vitrine principale. Elle regroupe
-              les informations dont vos clients ont besoin pour réserver en confiance.
+              Votre page NUADYX peut remplacer un mini site vitrine : elle regroupe
+              votre présentation, vos soins, vos photos, vos créneaux et vos règles
+              de réservation au même endroit.
             </p>
           </Card>
 
@@ -206,6 +231,40 @@ export default function HomePage() {
             {practitionerBenefits.map((item) => (
               <Card key={item} className="rounded-[1.7rem] p-5">
                 <p className="text-sm leading-7 text-[var(--foreground)]">{item}</p>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-4 py-10 md:px-6 md:py-14">
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-3xl">
+            <p className="text-xs uppercase tracking-[0.32em] text-[var(--primary)]/80">
+              Visibilité progressive
+            </p>
+            <h2 className="mt-4 text-4xl font-semibold tracking-tight text-[var(--foreground)]">
+              Plus votre page est claire, plus elle a de chances d’être mise en avant
+            </h2>
+            <p className="mt-4 text-sm leading-7 text-[var(--foreground-muted)]">
+              NUADYX ne promet pas des résultats magiques. En revanche, un profil
+              mieux renseigné, plus actif et plus fiable a plus de chances d’être
+              bien visible dans l’annuaire, surtout pendant le lancement.
+            </p>
+          </div>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {visibilitySignals.map((item) => (
+              <Card key={item.title} className="rounded-[1.7rem]">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] text-[var(--primary)]">
+                  <item.icon className="h-5 w-5" />
+                </div>
+                <h3 className="mt-5 text-xl font-semibold text-[var(--foreground)]">
+                  {item.title}
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-[var(--foreground-muted)]">
+                  {item.description}
+                </p>
               </Card>
             ))}
           </div>
@@ -296,9 +355,9 @@ export default function HomePage() {
                   Rejoindre l’annuaire gratuitement
                 </Button>
               </Link>
-              <Link href="/praticiens" className="w-full sm:w-auto">
+              <Link href="/trouver-un-praticien" className="w-full sm:w-auto">
                 <Button variant="secondary" size="lg" className="w-full sm:w-auto">
-                  Voir les premiers profils
+                  Voir un exemple de profil public
                 </Button>
               </Link>
             </div>
@@ -318,38 +377,6 @@ export default function HomePage() {
                 </div>
               </Card>
             ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="px-4 py-10 md:px-6 md:py-14">
-        <div className="mx-auto max-w-7xl">
-          <div className="max-w-3xl">
-            <p className="text-xs uppercase tracking-[0.32em] text-[var(--primary)]/80">
-              Acquisition praticiens
-            </p>
-            <h2 className="mt-4 text-4xl font-semibold tracking-tight text-[var(--foreground)]">
-              Être visible dans l’annuaire et recommander un praticien
-            </h2>
-          </div>
-
-          <div className="mt-8 grid gap-4 xl:grid-cols-3">
-            <LaunchInterestForm
-              kind="suggest_practitioner"
-              title="Suggérer un praticien"
-              description="Proposez un praticien du massage ou du bien-être à référencer dans l’annuaire NUADYX."
-            />
-            <LaunchInterestForm
-              kind="recommend_masseur"
-              title="Recommander mon masseur"
-              description="Vous avez déjà un praticien de confiance ? Recommandez-le pour l’aider à activer sa page."
-              practitionerLabel="Nom de votre masseur"
-            />
-            <LaunchInterestForm
-              kind="city_waitlist"
-              title="Être prévenu dans ma ville"
-              description="Recevez un message lorsque NUADYX commence à référencer des praticiens dans votre ville."
-            />
           </div>
         </div>
       </section>

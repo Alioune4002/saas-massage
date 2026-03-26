@@ -2,6 +2,12 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    AdminModerationIncidentDecisionView,
+    AdminModerationIncidentDetailView,
+    AdminModerationIncidentListView,
+    AdminModerationOverviewView,
+    AdminModerationRestrictionsView,
+    AdminModerationRiskEntriesView,
     ProfessionalAgendaView,
     ProfessionalAvailabilityViewSet,
     ProfessionalBookingViewSet,
@@ -37,6 +43,12 @@ router.register(
 )
 
 urlpatterns = [
+    path("admin/moderation/overview", AdminModerationOverviewView.as_view(), name="admin-moderation-overview"),
+    path("admin/moderation/incidents", AdminModerationIncidentListView.as_view(), name="admin-moderation-incidents"),
+    path("admin/moderation/incidents/<uuid:pk>", AdminModerationIncidentDetailView.as_view(), name="admin-moderation-incident-detail"),
+    path("admin/moderation/incidents/<uuid:pk>/decide", AdminModerationIncidentDecisionView.as_view(), name="admin-moderation-incident-decide"),
+    path("admin/moderation/restrictions", AdminModerationRestrictionsView.as_view(), name="admin-moderation-restrictions"),
+    path("admin/moderation/risk-entries", AdminModerationRiskEntriesView.as_view(), name="admin-moderation-risk-entries"),
     path("availabilities/", PublicAvailabilityListView.as_view(), name="public-availabilities"),
     path("bookings/", PublicBookingCreateView.as_view(), name="public-bookings-create"),
     path("bookings/verify-email/", PublicBookingVerifyEmailView.as_view(), name="public-bookings-verify-email"),

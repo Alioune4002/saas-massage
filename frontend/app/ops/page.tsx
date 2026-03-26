@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { AdminShell } from "@/components/admin/admin-shell";
 import { OpsDashboard } from "@/components/directory/ops-dashboard";
 
 export default async function OpsPage() {
@@ -15,5 +16,12 @@ export default async function OpsPage() {
     redirect("/dashboard");
   }
 
-  return <OpsDashboard />;
+  return (
+    <AdminShell
+      title="Cockpit business / acquisition / annuaire"
+      description="Pilote la croissance locale, les imports, les revendications, les campagnes, les suppressions et la couverture ville par ville."
+    >
+      <OpsDashboard />
+    </AdminShell>
+  );
 }
