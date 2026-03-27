@@ -14,6 +14,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import {
   connectPaymentAccount,
   getDashboardProfile,
+  getApiFieldErrors,
+  getApiFormError,
   getPaymentOverview,
   type DashboardProfile,
   type PaymentOverview,
@@ -33,6 +35,11 @@ export default function PaymentsPage() {
   const [savingVerification, setSavingVerification] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [connectError, setConnectError] = useState("");
+  const [verificationError, setVerificationError] = useState("");
+  const [verificationFieldErrors, setVerificationFieldErrors] = useState<
+    Record<string, string>
+  >({});
 
   useEffect(() => {
     let active = true;
@@ -71,6 +78,7 @@ export default function PaymentsPage() {
     try {
       setConnecting(true);
       setError("");
+      setConnectError("");
       const result = await connectPaymentAccount();
       if (result.url) {
         window.location.href = result.url;
@@ -78,10 +86,11 @@ export default function PaymentsPage() {
       }
       setNotice("Le compte de paiement de test est prêt.");
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Impossible de préparer le compte de paiement."
+      setConnectError(
+        getApiFormError(
+          err,
+          "Impossible de préparer la connexion du compte de paiement."
+        )
       );
     } finally {
       setConnecting(false);
@@ -95,16 +104,20 @@ export default function PaymentsPage() {
     try {
       setSavingVerification(true);
       setError("");
+      setVerificationError("");
+      setVerificationFieldErrors({});
       const nextVerification = await updatePractitionerVerification(formData);
       setVerification(nextVerification);
       setNotice(
         "Les éléments de vérification ont été enregistrés. Le statut sera mis à jour après revue."
       );
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Impossible d’enregistrer les éléments de vérification."
+      setVerificationFieldErrors(getApiFieldErrors(err));
+      setVerificationError(
+        getApiFormError(
+          err,
+          "Impossible d’enregistrer les éléments de vérification."
+        )
       );
     } finally {
       setSavingVerification(false);
@@ -181,6 +194,12 @@ export default function PaymentsPage() {
                 {connecting ? "Préparation..." : "Connecter mon compte de paiement"}
               </Button>
             </div>
+
+            {connectError ? (
+              <Notice tone="error" className="mt-5">
+                {connectError}
+              </Notice>
+            ) : null}
           </Card>
 
           <Card>
@@ -206,33 +225,48 @@ export default function PaymentsPage() {
               {verification?.rejection_reason ? (
                 <Notice tone="error">{verification.rejection_reason}</Notice>
               ) : null}
+              {verificationError ? (
+                <Notice tone="error">{verificationError}</Notice>
+              ) : null}
 
               <form
                 onSubmit={handleVerificationSubmit}
                 className="grid gap-4 lg:grid-cols-2"
               >
-                <FieldWrapper label="SIREN">
+                <FieldWrapper
+                  label="SIREN"
+                  error={verificationFieldErrors.siren}
+                >
                   <Input
                     name="siren"
                     defaultValue={verification?.siren || ""}
                     placeholder="9 chiffres"
                   />
                 </FieldWrapper>
-                <FieldWrapper label="SIRET">
+                <FieldWrapper
+                  label="SIRET"
+                  error={verificationFieldErrors.siret}
+                >
                   <Input
                     name="siret"
                     defaultValue={verification?.siret || ""}
                     placeholder="14 chiffres"
                   />
                 </FieldWrapper>
-                <FieldWrapper label="Bénéficiaire">
+                <FieldWrapper
+                  label="Bénéficiaire"
+                  error={verificationFieldErrors.beneficiary_name}
+                >
                   <Input
                     name="beneficiary_name"
                     defaultValue={verification?.beneficiary_name || ""}
                     placeholder="Nom du bénéficiaire des versements"
                   />
                 </FieldWrapper>
-                <FieldWrapper label="4 derniers chiffres de l’IBAN">
+                <FieldWrapper
+                  label="4 derniers chiffres de l’IBAN"
+                  error={verificationFieldErrors.iban_last4}
+                >
                   <Input
                     name="iban_last4"
                     maxLength={4}
@@ -240,19 +274,34 @@ export default function PaymentsPage() {
                     placeholder="1234"
                   />
                 </FieldWrapper>
-                <FieldWrapper label="Pièce d’identité">
+                <FieldWrapper
+                  label="Pièce d’identité"
+                  error={verificationFieldErrors.identity_document}
+                >
                   <Input name="identity_document" type="file" />
                 </FieldWrapper>
-                <FieldWrapper label="Selfie de vérification">
+                <FieldWrapper
+                  label="Selfie de vérification"
+                  error={verificationFieldErrors.selfie_document}
+                >
                   <Input name="selfie_document" type="file" />
                 </FieldWrapper>
-                <FieldWrapper label="Justificatif d’activité">
+                <FieldWrapper
+                  label="Justificatif d’activité"
+                  error={verificationFieldErrors.activity_document}
+                >
                   <Input name="activity_document" type="file" />
                 </FieldWrapper>
-                <FieldWrapper label="Attestation RC Pro">
+                <FieldWrapper
+                  label="Attestation RC Pro"
+                  error={verificationFieldErrors.liability_insurance_document}
+                >
                   <Input name="liability_insurance_document" type="file" />
                 </FieldWrapper>
-                <FieldWrapper label="Justificatif bancaire">
+                <FieldWrapper
+                  label="Justificatif bancaire"
+                  error={verificationFieldErrors.iban_document}
+                >
                   <Input name="iban_document" type="file" />
                 </FieldWrapper>
                 <div className="lg:col-span-2">

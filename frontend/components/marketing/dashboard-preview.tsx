@@ -3,7 +3,7 @@ import { CalendarClock, Sparkles, WalletCards } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 
-const mockStats = [
+const previewStats = [
   { label: "Soins présentés", value: "12", icon: Sparkles },
   { label: "Créneaux ouverts", value: "28", icon: CalendarClock },
   { label: "Demandes reçues", value: "18", icon: WalletCards },
@@ -27,7 +27,7 @@ export function DashboardPreview() {
         </div>
 
         <div className="mt-6 grid gap-3 md:grid-cols-3">
-          {mockStats.map((item) => (
+          {previewStats.map((item) => (
             <div
               key={item.label}
               className="rounded-[1.4rem] border border-[var(--border)] bg-[var(--surface-muted)] p-4"

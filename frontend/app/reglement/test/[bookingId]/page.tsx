@@ -10,6 +10,9 @@ import { Card } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { confirmTestPayment } from "@/lib/api";
 
+const INTERNAL_TEST_PAGES_ENABLED =
+  process.env.NEXT_PUBLIC_ENABLE_INTERNAL_TEST_PAGES === "true";
+
 export default function TestPaymentPage() {
   const params = useParams<{ bookingId: string }>();
   const searchParams = useSearchParams();
@@ -19,6 +22,33 @@ export default function TestPaymentPage() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
+  if (!INTERNAL_TEST_PAGES_ENABLED) {
+    return (
+      <main className="min-h-screen px-4 py-10 md:px-6">
+        <div className="mx-auto max-w-2xl">
+          <Card className="rounded-[2rem] p-6">
+            <p className="text-xs uppercase tracking-[0.26em] text-[var(--primary)]/80">
+              Validation du règlement
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold text-[var(--foreground)]">
+              Page indisponible
+            </h1>
+            <p className="mt-5 text-sm leading-7 text-[var(--foreground-muted)]">
+              Cette étape interne n’est pas ouverte sur cet environnement.
+            </p>
+            <div className="mt-6">
+              <Link href="/">
+                <Button variant="secondary" size="lg">
+                  Revenir au site
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        </div>
+      </main>
+    );
+  }
+
   async function handleConfirm() {
     try {
       setLoading(true);
@@ -26,14 +56,14 @@ export default function TestPaymentPage() {
       const result = await confirmTestPayment(bookingId, token);
       setNotice(
         result.amount_remaining_eur && Number(result.amount_remaining_eur) > 0
-          ? "Le règlement test est bien sécurisé. Le reste pourra être réglé ensuite selon les conditions prévues."
-          : "Le règlement test est bien sécurisé sur la plateforme."
+          ? "Le règlement est bien sécurisé. Le reste pourra être réglé ensuite selon les conditions prévues."
+          : "Le règlement est bien sécurisé sur la plateforme."
       );
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Impossible de finaliser ce règlement de test."
+          : "Impossible de finaliser ce règlement."
       );
     } finally {
       setLoading(false);
@@ -48,7 +78,7 @@ export default function TestPaymentPage() {
             <ShieldCheck className="h-6 w-6 text-[var(--primary)]" />
             <div>
               <p className="text-xs uppercase tracking-[0.26em] text-[var(--primary)]/80">
-                Règlement de test Stripe
+                Validation du règlement
               </p>
               <h1 className="mt-2 text-3xl font-semibold text-[var(--foreground)]">
                 Finaliser le règlement sécurisé
@@ -57,13 +87,13 @@ export default function TestPaymentPage() {
           </div>
 
           <p className="mt-5 text-sm leading-7 text-[var(--foreground-muted)]">
-            Cette page simule le retour prestataire en environnement de test. Le
-            règlement ne sera marqué comme sécurisé qu’après cette validation.
+            Cette page confirme le retour du prestataire de paiement avant de
+            marquer le règlement comme sécurisé sur la plateforme.
           </p>
 
           {!token ? (
             <Notice tone="info" className="mt-5">
-              Ce lien de règlement de test est incomplet ou n’est plus valable.
+              Ce lien de règlement est incomplet ou n’est plus valable.
             </Notice>
           ) : null}
 
@@ -72,7 +102,7 @@ export default function TestPaymentPage() {
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Button size="lg" onClick={handleConfirm} disabled={loading || !token}>
-              {loading ? "Validation en cours..." : "Finaliser le règlement de test"}
+              {loading ? "Validation en cours..." : "Finaliser le règlement"}
             </Button>
             <Link href="/" className="shrink-0">
               <Button variant="secondary" size="lg">

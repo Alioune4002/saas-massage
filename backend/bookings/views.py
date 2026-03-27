@@ -1195,24 +1195,35 @@ class ProfessionalPaymentConnectView(APIView):
         config = get_stripe_connect_config()
 
         if config.enabled:
-            if not payment_account.stripe_account_id:
-                stripe_account = create_connected_account(
-                    email=professional.user.email,
-                    business_name=professional.business_name,
-                    country=payment_account.country,
-                    idempotency_key=f"stripe-account-{professional.id}",
-                )
-                payment_account.stripe_account_id = stripe_account.get("id", "")
-                payment_account.account_email = professional.user.email
-                payment_account.onboarding_status = ProfessionalPaymentAccount.OnboardingStatus.PENDING
-                payment_account.save()
+            try:
+                if not payment_account.stripe_account_id:
+                    stripe_account = create_connected_account(
+                        email=professional.user.email,
+                        business_name=professional.business_name,
+                        country=payment_account.country,
+                        idempotency_key=f"stripe-account-{professional.id}",
+                    )
+                    payment_account.stripe_account_id = stripe_account.get("id", "")
+                    payment_account.account_email = professional.user.email
+                    payment_account.onboarding_status = ProfessionalPaymentAccount.OnboardingStatus.PENDING
+                    payment_account.save()
 
-            account_link = create_account_link(
-                account_id=payment_account.stripe_account_id,
-                refresh_url=f"{settings.FRONTEND_APP_URL}/payments?refresh=1",
-                return_url=f"{settings.FRONTEND_APP_URL}/payments?connected=1",
-                idempotency_key=f"stripe-account-link-{professional.id}",
-            )
+                account_link = create_account_link(
+                    account_id=payment_account.stripe_account_id,
+                    refresh_url=f"{settings.FRONTEND_APP_URL}/payments?refresh=1",
+                    return_url=f"{settings.FRONTEND_APP_URL}/payments?connected=1",
+                    idempotency_key=f"stripe-account-link-{professional.id}",
+                )
+            except StripeConnectError as exc:
+                raise ValidationError(
+                    {
+                        "payment_account": (
+                            "La connexion Stripe n’a pas pu être préparée pour le moment. "
+                            "Vérifiez la configuration du compte ou réessayez dans quelques instants."
+                        )
+                    }
+                ) from exc
+
             return Response({"url": account_link.get("url", ""), "mode": "stripe_connect"})
 
         if config.internal_test_mode:

@@ -39,7 +39,7 @@ export default function LoginPage() {
 
     if (backendUnavailable) {
       setError(
-        "Le service est temporairement indisponible. La connexion sécurisée reprendra dès que le backend sera revenu."
+        "Le service est temporairement indisponible. La connexion sécurisée reprendra dès que le service sera revenu."
       );
       return;
     }
@@ -140,9 +140,9 @@ export default function LoginPage() {
 
               {backendUnavailable || serviceUnavailable ? (
                 <Notice tone="error" className="mt-4">
-                  Le service backend est temporairement indisponible. Tu peux
-                  consulter le site, mais la connexion sécurisée reprendra quand
-                  le service sera rétabli.
+                  Le service est temporairement indisponible. Vous pouvez
+                  consulter le site, mais la connexion sécurisée reprendra dès
+                  que l’accès sera rétabli.
                 </Notice>
               ) : null}
 

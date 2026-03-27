@@ -10,10 +10,11 @@ import { cn } from "@/lib/utils";
 type FieldWrapperProps = {
   label: string;
   hint?: string;
+  error?: string;
   children: ReactNode;
 };
 
-export function FieldWrapper({ label, hint, children }: FieldWrapperProps) {
+export function FieldWrapper({ label, hint, error = "", children }: FieldWrapperProps) {
   return (
     <label className="block space-y-2">
       <div className="flex items-center justify-between gap-3">
@@ -23,6 +24,9 @@ export function FieldWrapper({ label, hint, children }: FieldWrapperProps) {
         ) : null}
       </div>
       {children}
+      {error ? (
+        <p className="text-xs leading-5 text-[var(--danger)]">{error}</p>
+      ) : null}
     </label>
   );
 }

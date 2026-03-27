@@ -55,12 +55,12 @@ export class ApiUnavailableError extends ApiError {
 function extractApiErrorMessage(body: unknown, status: number) {
   if (typeof body === "object" && body !== null) {
     if ("detail" in body && typeof (body as { detail?: unknown }).detail === "string") {
-      return (body as { detail: string }).detail;
+      return humanizeApiMessage((body as { detail: string }).detail);
     }
 
     for (const value of Object.values(body as Record<string, unknown>)) {
       if (typeof value === "string" && value.trim()) {
-        return value;
+        return humanizeApiMessage(value);
       }
 
       if (
@@ -68,12 +68,94 @@ function extractApiErrorMessage(body: unknown, status: number) {
         typeof value[0] === "string" &&
         value[0].trim()
       ) {
-        return value[0];
+        return humanizeApiMessage(value[0]);
       }
     }
   }
 
-  return `Erreur API (${status})`;
+  return status >= 500
+    ? "Le serveur a rencontré un problème temporaire. Réessaie dans quelques instants."
+    : "L’action n’a pas pu être enregistrée. Vérifie les informations saisies puis réessaie.";
+}
+
+function humanizeApiMessage(message: string) {
+  const normalized = message.trim();
+  if (!normalized) {
+    return "Une erreur est survenue. Réessaie dans quelques instants.";
+  }
+
+  const replacements: Record<string, string> = {
+    "La valeur doit être un JSON valide.":
+      "Le contenu de ce champ n’a pas pu être enregistré. Vérifie sa mise en forme puis réessaie.",
+    "Not a valid string.":
+      "La valeur saisie n’est pas reconnue.",
+    "This field is required.":
+      "Ce champ est obligatoire.",
+    "A valid integer is required.":
+      "La valeur attendue doit être un nombre entier.",
+    "A valid number is required.":
+      "La valeur attendue doit être un nombre valide.",
+  };
+
+  return replacements[normalized] || normalized;
+}
+
+export function getApiFieldErrors(error: unknown) {
+  if (!(error instanceof ApiError) || typeof error.body !== "object" || error.body === null) {
+    return {} as Record<string, string>;
+  }
+
+  const body = error.body as Record<string, unknown>;
+  const fieldErrors: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(body)) {
+    if (key === "detail" || key === "non_field_errors") {
+      continue;
+    }
+
+    if (typeof value === "string" && value.trim()) {
+      fieldErrors[key] = humanizeApiMessage(value);
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      const firstMessage = value.find(
+        (item): item is string => typeof item === "string" && item.trim().length > 0
+      );
+      if (firstMessage) {
+        fieldErrors[key] = humanizeApiMessage(firstMessage);
+      }
+    }
+  }
+
+  return fieldErrors;
+}
+
+export function getApiFormError(error: unknown, fallback: string) {
+  if (!(error instanceof ApiError)) {
+    return error instanceof Error ? error.message : fallback;
+  }
+
+  const body = error.body;
+  if (typeof body === "object" && body !== null) {
+    if (
+      "non_field_errors" in body &&
+      Array.isArray((body as { non_field_errors?: unknown }).non_field_errors)
+    ) {
+      const first = (body as { non_field_errors?: unknown[] }).non_field_errors?.find(
+        (item): item is string => typeof item === "string" && item.trim().length > 0
+      );
+      if (first) {
+        return humanizeApiMessage(first);
+      }
+    }
+
+    if ("detail" in body && typeof (body as { detail?: unknown }).detail === "string") {
+      return humanizeApiMessage((body as { detail: string }).detail);
+    }
+  }
+
+  return humanizeApiMessage(error.message || fallback);
 }
 
 function broadcastApiAvailability(

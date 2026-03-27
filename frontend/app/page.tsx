@@ -124,9 +124,9 @@ export default function HomePage() {
                   Créer ma page praticien
                 </Button>
               </Link>
-              <Link href="/trouver-un-praticien" className="w-full">
+              <Link href="/annuaire" className="w-full">
                 <Button variant="secondary" size="lg" className="w-full">
-                  Voir un exemple de page
+                  Découvrir l’annuaire
                 </Button>
               </Link>
             </div>
@@ -359,9 +359,9 @@ export default function HomePage() {
                   Rejoindre l’annuaire gratuitement
                 </Button>
               </Link>
-              <Link href="/trouver-un-praticien" className="w-full sm:w-auto">
+              <Link href="/annuaire" className="w-full sm:w-auto">
                 <Button variant="secondary" size="lg" className="w-full sm:w-auto">
-                  Voir un exemple de profil public
+                  Découvrir les profils publics
                 </Button>
               </Link>
             </div>

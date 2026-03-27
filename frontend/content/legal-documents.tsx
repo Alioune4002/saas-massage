@@ -299,7 +299,7 @@ export const LEGAL_DOCUMENTS: Record<LegalDocumentSlug, LegalDocumentDefinition>
             <p>Email : contact@nuadyx.com — Support : support@nuadyx.com</p>
             <p>TVA intracommunautaire : FR74995288438</p>
             <p>
-              Les présentes CGV régissent les conditions dans lesquelles NUADYX fournit aux professionnels et, le cas échéant, aux autres utilisateurs souscrivant une offre payante, un accès à ses services numériques SaaS.
+              Les présentes CGV régissent les conditions dans lesquelles NUADYX fournit aux professionnels et, le cas échéant, aux autres utilisateurs souscrivant une offre payante, un accès à ses services numériques.
             </p>
           </>
         ),
@@ -322,8 +322,16 @@ export const LEGAL_DOCUMENTS: Record<LegalDocumentSlug, LegalDocumentDefinition>
         title: "Tarifs, souscription et paiement",
         content: (
           <>
-            <p>Tarifs NUADYX : [À compléter avant mise en ligne]</p>
-            <p>Durée d’abonnement : [À compléter avant mise en ligne]</p>
+            <p>
+              Pendant la phase actuelle de lancement, l’inscription et
+              l’utilisation standard de NUADYX sont proposées gratuitement aux
+              praticiens.
+            </p>
+            <p>
+              Si une offre payante est ouverte ultérieurement, son prix, sa
+              durée et ses conditions seront affichés clairement avant toute
+              souscription.
+            </p>
             <p>
               La souscription est réputée conclue à compter de la validation de la commande et, si applicable, du premier paiement.
             </p>
@@ -478,7 +486,7 @@ export const LEGAL_DOCUMENTS: Record<LegalDocumentSlug, LegalDocumentDefinition>
             <p>Adresse : 1 PLACE GUY ROPARTZ, 29000 QUIMPER, France</p>
             <p>Email : contact@nuadyx.com</p>
             <p>Support : support@nuadyx.com</p>
-            <p>DPO : Non désigné à ce jour / [À compléter si un DPO est nommé]</p>
+            <p>DPO : Aucun DPO désigné à ce jour.</p>
           </>
         ),
       },

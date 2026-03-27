@@ -11,20 +11,33 @@ export function SiteHeader({
 }) {
   const primaryHref = mode === "client" ? "/annuaire" : "/inscription";
   const primaryLabel = mode === "client" ? "Voir l’annuaire" : "Créer ma page";
+  const switchHref = mode === "client" ? "/" : "/trouver-un-praticien";
+  const switchLabel = mode === "client" ? "Je suis praticien" : "Trouver un praticien";
+  const secondaryLinks =
+    mode === "practitioner"
+      ? [
+          { href: "#pourquoi-rejoindre", label: "Pourquoi rejoindre NUADYX" },
+          { href: "#comment-ca-marche", label: "Comment ça marche" },
+          { href: "#lancement", label: "Gratuit pendant le lancement" },
+        ]
+      : [
+          { href: "#recherche-locale", label: "Recherche locale" },
+          { href: "#recommander", label: "Recommander un praticien" },
+        ];
 
   return (
     <header className="sticky top-0 z-30 px-4 py-4 md:px-6">
-      <div className="glass-panel mx-auto flex max-w-7xl flex-col gap-3 overflow-hidden rounded-[1.8rem] px-4 py-3 md:px-5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 items-start justify-between gap-3 lg:flex-1 lg:items-center">
+      <div className="glass-panel mx-auto max-w-7xl overflow-hidden rounded-[1.8rem] px-4 py-3 md:px-5">
+        <div className="flex items-start justify-between gap-3">
           <Link href="/" className="min-w-0 shrink">
-            <span className="inline-flex min-w-0 max-w-[11.75rem] sm:max-w-[13.5rem] lg:max-w-none">
+            <span className="inline-flex min-w-0 max-w-[11rem] sm:max-w-[13rem] md:max-w-[16rem]">
               <NuadyxLogo priority showText textClassName="min-w-0" />
             </span>
           </Link>
 
-          <div className="flex shrink-0 items-center gap-2 lg:hidden">
+          <div className="flex shrink-0 items-center gap-2">
             <ThemeToggle compact />
-            <Link href="/login">
+            <Link href="/login" className="hidden sm:inline-flex">
               <Button variant="secondary" size="sm" className="whitespace-nowrap px-3">
                 Se connecter
               </Button>
@@ -32,74 +45,48 @@ export function SiteHeader({
           </div>
         </div>
 
-        <nav className="hidden items-center gap-6 text-sm text-[var(--foreground-muted)] lg:flex">
-          <Link
-            href="/"
-            className={mode === "practitioner" ? "text-[var(--foreground)]" : "hover:text-[var(--foreground)]"}
-          >
-            Je suis praticien
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--border)]/70 pt-3">
+          <Link href={switchHref}>
+            <Button variant="ghost" size="sm" className="whitespace-nowrap">
+              {switchLabel}
+            </Button>
           </Link>
-          <Link
-            href="/trouver-un-praticien"
-            className={mode === "client" ? "text-[var(--foreground)]" : "hover:text-[var(--foreground)]"}
-          >
-            Trouver un praticien
+          <Link href="/annuaire">
+            <Button
+              variant={mode === "client" ? "secondary" : "ghost"}
+              size="sm"
+              className="whitespace-nowrap"
+            >
+              Parcourir l’annuaire
+            </Button>
           </Link>
-          <Link href="/annuaire" className="hover:text-[var(--foreground)]">
-            Parcourir l’annuaire
-          </Link>
-          <Link href="/favoris" className="hover:text-[var(--foreground)]">
-            Mes favoris
-          </Link>
-          {mode === "practitioner" ? (
-            <>
-              <a href="#pourquoi-rejoindre" className="hover:text-[var(--foreground)]">
-                Pourquoi rejoindre NUADYX
-              </a>
-              <a href="#comment-ca-marche" className="hover:text-[var(--foreground)]">
-                Comment ça marche
-              </a>
-              <a href="#lancement" className="hover:text-[var(--foreground)]">
-                Gratuit pendant le lancement
-              </a>
-            </>
-          ) : (
-            <>
-              <a href="#recherche-locale" className="hover:text-[var(--foreground)]">
-                Recherche locale
-              </a>
-              <a href="#recommander" className="hover:text-[var(--foreground)]">
-                Recommander un praticien
-              </a>
-            </>
-          )}
-        </nav>
-
-        <div className="grid grid-cols-2 gap-2 sm:flex lg:hidden">
-          <Link href={mode === "client" ? "/" : "/trouver-un-praticien"}>
-            <Button variant="ghost" size="sm" className="w-full whitespace-nowrap">
-              {mode === "client" ? "Je suis praticien" : "Trouver un praticien"}
+          <Link href="/favoris">
+            <Button variant="ghost" size="sm" className="whitespace-nowrap">
+              Mes favoris
             </Button>
           </Link>
           <Link href={primaryHref}>
-            <Button size="sm" className="w-full whitespace-nowrap">
+            <Button size="sm" className="whitespace-nowrap">
               {primaryLabel}
             </Button>
           </Link>
-        </div>
-
-        <div className="hidden shrink-0 items-center gap-2 lg:flex">
-          <ThemeToggle compact />
-          <Link href={primaryHref} className="hidden md:inline-flex">
-            <Button size="md" className="whitespace-nowrap">
-              {mode === "client" ? "Voir l’annuaire" : "Créer ma page praticien"}
-            </Button>
-          </Link>
-          <Link href="/login">
-            <Button variant="secondary" size="md" className="whitespace-nowrap">
+          <Link href="/login" className="sm:hidden">
+            <Button variant="secondary" size="sm" className="whitespace-nowrap">
               Se connecter
             </Button>
           </Link>
+
+          <div className="hidden flex-wrap items-center gap-2 lg:flex">
+            {secondaryLinks.map((item) => (
+              <a
+                key={item.label}
+                href={item.href}
+                className="rounded-full px-3 py-2 text-sm text-[var(--foreground-muted)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
+              >
+                {item.label}
+              </a>
+            ))}
+          </div>
         </div>
       </div>
     </header>

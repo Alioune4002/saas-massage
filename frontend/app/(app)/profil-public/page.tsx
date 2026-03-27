@@ -16,6 +16,8 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SwitchRow } from "@/components/ui/switch-row";
 import {
+  getApiFieldErrors,
+  getApiFormError,
   getAssistantProfile,
   getDashboardProfile,
   getServices,
@@ -47,6 +49,8 @@ export default function PublicProfileSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
@@ -177,6 +181,9 @@ export default function PublicProfileSettingsPage() {
     try {
       setSaving(true);
       setError("");
+      setSaveError("");
+      setFieldErrors({});
+      setNotice("");
 
       const payload = new FormData();
       payload.append("business_name", draft.displayName);
@@ -249,11 +256,11 @@ export default function PublicProfileSettingsPage() {
       setCoverPhotoFile(null);
       setNotice("Mon profil public a été enregistré.");
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Impossible d’enregistrer le profil public."
+      setFieldErrors(getApiFieldErrors(err));
+      setSaveError(
+        getApiFormError(err, "Impossible d’enregistrer le profil public.")
       );
+      setNotice("");
     } finally {
       setSaving(false);
     }
@@ -418,7 +425,10 @@ export default function PublicProfileSettingsPage() {
               </FieldWrapper>
 
               <div className="md:col-span-2">
-                <FieldWrapper label="Email de connexion">
+                <FieldWrapper
+                  label="Email de connexion"
+                  error={fieldErrors.login_email}
+                >
                   <Input
                     type="email"
                     value={profile.login_email}
@@ -494,7 +504,11 @@ export default function PublicProfileSettingsPage() {
                 </FieldWrapper>
               </div>
 
-              <FieldWrapper label="Lien public" hint="nuadyx.app/votre-lien">
+              <FieldWrapper
+                label="Lien public"
+                hint="nuadyx.app/votre-lien"
+                error={fieldErrors.slug}
+              >
                 <Input
                   value={draft.slug}
                   onChange={(event) =>
@@ -505,7 +519,10 @@ export default function PublicProfileSettingsPage() {
                 />
               </FieldWrapper>
 
-              <FieldWrapper label="Nom affiché">
+              <FieldWrapper
+                label="Nom affiché"
+                error={fieldErrors.business_name}
+              >
                 <Input
                   value={draft.displayName}
                   onChange={(event) =>
@@ -519,7 +536,10 @@ export default function PublicProfileSettingsPage() {
               </FieldWrapper>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <FieldWrapper label="Ville principale">
+                <FieldWrapper
+                  label="Ville principale"
+                  error={fieldErrors.city}
+                >
                   <Input
                     value={draft.city}
                     onChange={(event) =>
@@ -548,7 +568,10 @@ export default function PublicProfileSettingsPage() {
                 </FieldWrapper>
               </div>
 
-              <FieldWrapper label="Accroche visible">
+              <FieldWrapper
+                label="Accroche visible"
+                error={fieldErrors.public_headline}
+              >
                 <Input
                   value={draft.headline}
                   onChange={(event) =>
@@ -582,6 +605,7 @@ export default function PublicProfileSettingsPage() {
               <FieldWrapper
                 label="Spécialités"
                 hint="Sépare les éléments par une virgule"
+                error={fieldErrors.specialties}
               >
                 <Input
                   value={draft.specialties.join(", ")}
@@ -605,6 +629,7 @@ export default function PublicProfileSettingsPage() {
               <FieldWrapper
                 label="3 points forts"
                 hint="Un point par ligne pour rassurer rapidement"
+                error={fieldErrors.highlight_points}
               >
                 <Textarea
                   value={draft.highlightPoints.join("\n")}
@@ -626,7 +651,7 @@ export default function PublicProfileSettingsPage() {
                 />
               </FieldWrapper>
 
-              <FieldWrapper label="Présentation">
+              <FieldWrapper label="Présentation" error={fieldErrors.bio}>
                 <Textarea
                   value={draft.bio}
                   onChange={(event) =>
@@ -716,7 +741,10 @@ export default function PublicProfileSettingsPage() {
 
             <div className="mt-6 grid gap-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <FieldWrapper label="Téléphone public">
+                <FieldWrapper
+                  label="Téléphone public"
+                  error={fieldErrors.phone}
+                >
                   <Input
                     value={draft.phone}
                     onChange={(event) =>
@@ -728,7 +756,10 @@ export default function PublicProfileSettingsPage() {
                   />
                 </FieldWrapper>
 
-                <FieldWrapper label="Email public">
+                <FieldWrapper
+                  label="Email public"
+                  error={fieldErrors.public_email}
+                >
                   <Input
                     type="email"
                     value={draft.publicEmail}
@@ -747,6 +778,7 @@ export default function PublicProfileSettingsPage() {
               <FieldWrapper
                 label="Site web"
                 hint="Tu peux coller ton domaine même sans https://"
+                error={fieldErrors.website_url}
               >
                 <Input
                   value={draft.websiteUrl}
@@ -762,7 +794,10 @@ export default function PublicProfileSettingsPage() {
               </FieldWrapper>
 
               <div className="grid gap-4 md:grid-cols-3">
-                <FieldWrapper label="Instagram">
+                <FieldWrapper
+                  label="Instagram"
+                  error={fieldErrors.instagram_url}
+                >
                   <Input
                     value={draft.instagramUrl}
                     onChange={(event) =>
@@ -776,7 +811,10 @@ export default function PublicProfileSettingsPage() {
                   />
                 </FieldWrapper>
 
-                <FieldWrapper label="Facebook">
+                <FieldWrapper
+                  label="Facebook"
+                  error={fieldErrors.facebook_url}
+                >
                   <Input
                     value={draft.facebookUrl}
                     onChange={(event) =>
@@ -790,7 +828,10 @@ export default function PublicProfileSettingsPage() {
                   />
                 </FieldWrapper>
 
-                <FieldWrapper label="TikTok">
+                <FieldWrapper
+                  label="TikTok"
+                  error={fieldErrors.tiktok_url}
+                >
                   <Input
                     value={draft.tiktokUrl}
                     onChange={(event) =>
@@ -1044,7 +1085,11 @@ export default function PublicProfileSettingsPage() {
               ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
-                <FieldWrapper label="Annulation sans frais jusqu’à..." hint="En heures">
+                <FieldWrapper
+                  label="Annulation sans frais jusqu’à..."
+                  hint="En heures"
+                  error={fieldErrors.free_cancellation_notice_hours}
+                >
                   <Input
                     type="number"
                     min="1"
@@ -1084,6 +1129,7 @@ export default function PublicProfileSettingsPage() {
               <FieldWrapper
                 label="Message rassurant affiché au client"
                 hint="Visible avant la validation du rendez-vous"
+                error={fieldErrors.payment_message}
               >
                 <Input
                   value={draft.paymentMessage}
@@ -1189,6 +1235,12 @@ export default function PublicProfileSettingsPage() {
                 </div>
               </div>
             </div>
+
+            {saveError ? (
+              <Notice tone="error" className="mt-6">
+                {saveError}
+              </Notice>
+            ) : null}
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <Button size="lg" onClick={handleSaveDraft} disabled={saving}>

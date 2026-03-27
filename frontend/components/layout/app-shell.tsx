@@ -267,8 +267,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="min-w-0 flex-1">
           <header className="glass-panel sticky top-3 z-30 mb-4 rounded-[2rem] px-4 py-4 md:px-6">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
                 <Button
                   variant="secondary"
                   size="md"
@@ -294,12 +294,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 md:gap-3">
+              <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-3">
                 <ThemeToggle compact />
-                <Badge tone="info" className="hidden md:inline-flex">
+                <Badge tone="info" className="hidden lg:inline-flex">
                   Espace praticien
                 </Badge>
-                <div className="hidden rounded-[1.3rem] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 md:flex md:items-center md:gap-3">
+                <div className="hidden rounded-[1.3rem] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 lg:flex lg:items-center lg:gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(143,242,203,0.18),rgba(124,156,255,0.18))] text-sm font-semibold text-[var(--foreground)]">
                     {getInitials(displayName)}
                   </div>
@@ -319,7 +319,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   onClick={logout}
                 >
                   <LogOut className="h-4.5 w-4.5" />
-                  <span className="hidden md:inline">Déconnexion</span>
+                  <span className="hidden lg:inline">Déconnexion</span>
                 </Button>
               </div>
             </div>

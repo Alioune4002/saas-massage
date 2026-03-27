@@ -1027,11 +1027,10 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
               ) : (
                 <div className="mt-6 rounded-[1.5rem] border border-dashed border-[var(--border)] bg-[var(--background-soft)] p-5">
                   <p className="text-sm font-medium text-[var(--foreground)]">
-                    Les réponses fréquentes seront bientôt visibles ici
+                    Le praticien n’a pas encore renseigné de questions fréquentes
                   </p>
                   <p className="mt-2 text-sm leading-6 text-[var(--foreground-muted)]">
-                    Cette zone est prête à afficher les réponses utiles du
-                    praticien pour aider le client à réserver plus sereinement.
+                    Cette section pourra préciser le déroulé d’une séance, la préparation utile et les règles de réservation.
                   </p>
                 </div>
               )}
@@ -1069,7 +1068,7 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
                       <>
                         <p className="mt-2 text-sm leading-6 text-[var(--foreground-muted)]">
                           {profile.review_count} avis publié{profile.review_count > 1 ? "s" : ""} · note moyenne{" "}
-                          {profile.review_average ? `${profile.review_average}/5` : "à venir"}
+                          {profile.review_average ? `${profile.review_average}/5` : "non affichée"}
                         </p>
                         <div className="mt-4 grid gap-3">
                           {profile.reviews.slice(0, 3).map((review) => (
@@ -1108,7 +1107,7 @@ export function PublicProfilePage({ slug }: PublicProfilePageProps) {
                       </>
                     ) : (
                       <p className="mt-2 text-sm leading-6 text-[var(--foreground-muted)]">
-                        Les premiers retours clients viendront bientôt renforcer la confiance autour de cette page.
+                        Cette page pourra afficher des avis vérifiés dès que des retours clients seront publiés.
                       </p>
                     )}
                   </div>

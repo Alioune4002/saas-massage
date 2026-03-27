@@ -107,8 +107,8 @@ export function PublicBookingCard({
       {backendUnavailable ? (
         <Notice tone="error" className="mt-5">
           Le service de réservation est momentanément indisponible. Vous pouvez
-          consulter la page du praticien, mais l’envoi d’une demande nécessite
-          le retour du backend.
+          consulter la page du praticien, mais l’envoi d’une demande reprendra
+          dès que le service sera de nouveau disponible.
         </Notice>
       ) : null}
 
