@@ -70,3 +70,19 @@ class RegistrationTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+
+class MeViewAdminCapabilityTests(APITestCase):
+    def test_superuser_me_exposes_superuser_and_admin_capabilities(self):
+        superuser = User.objects.create_superuser(
+            email="root@example.com",
+            username="root",
+            password="Password123!",
+        )
+        self.client.force_authenticate(superuser)
+
+        response = self.client.get("/api/auth/me/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["is_superuser"])
+        self.assertTrue(response.data["admin_capabilities"]["dashboard"])

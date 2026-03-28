@@ -99,7 +99,8 @@ export default function DashboardPage() {
     }
 
     setWelcomeNotice(consumeWelcomeNotice());
-    setIsAdmin(getStoredUser()?.role === "admin");
+    const sessionUser = getStoredUser();
+    setIsAdmin(Boolean(sessionUser && (sessionUser.role === "admin" || sessionUser.is_superuser)));
     void load();
     return () => {
       active = false;

@@ -25,6 +25,7 @@ export function setStoredUser(user: MeResponse) {
   window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
   document.cookie = `massage_saas_role=${encodeURIComponent(user.role)}; Path=/; Max-Age=2592000; SameSite=Lax`;
   document.cookie = `massage_saas_admin_role=${encodeURIComponent(user.admin_role || "")}; Path=/; Max-Age=2592000; SameSite=Lax`;
+  document.cookie = `massage_saas_is_superuser=${user.is_superuser ? "1" : "0"}; Path=/; Max-Age=2592000; SameSite=Lax`;
 }
 
 export function clearSession() {
@@ -33,6 +34,7 @@ export function clearSession() {
     window.localStorage.removeItem(USER_STORAGE_KEY);
     document.cookie = "massage_saas_role=; Path=/; Max-Age=0; SameSite=Lax";
     document.cookie = "massage_saas_admin_role=; Path=/; Max-Age=0; SameSite=Lax";
+    document.cookie = "massage_saas_is_superuser=; Path=/; Max-Age=0; SameSite=Lax";
   }
 }
 
@@ -48,7 +50,7 @@ export function getAuthenticatedHomePath(user: MeResponse | null) {
     return "/login";
   }
 
-  if (user.role === "admin") {
+  if (user.role === "admin" || user.is_superuser) {
     return "/admin";
   }
 

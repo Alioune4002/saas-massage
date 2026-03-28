@@ -17,7 +17,6 @@ import {
 import { NuadyxLogo } from "@/components/brand/nuadyx-logo";
 import { Card } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { getStoredUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -105,17 +104,21 @@ function isActivePath(pathname: string, href: string) {
 export function AdminShell({
   title,
   description,
+  capabilities,
+  adminIdentity,
   children,
 }: {
   title: string;
   description: string;
+  capabilities?: Record<string, boolean>;
+  adminIdentity?: {
+    email: string;
+    adminRole: string;
+    isSuperuser: boolean;
+  };
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  const capabilities = useMemo<Record<string, boolean> | null>(() => {
-    const me = getStoredUser();
-    return me?.admin_capabilities || null;
-  }, []);
 
   const visibleItems = useMemo(() => {
     if (!capabilities) {
@@ -137,6 +140,18 @@ export function AdminShell({
               <p className="mt-2 text-sm leading-6 text-[var(--foreground-muted)]">
                 Centre de pilotage plateforme, acquisition, modération et support.
               </p>
+              {adminIdentity ? (
+                <div className="mt-4 rounded-[1.2rem] border border-[var(--border)] bg-[var(--background-soft)] px-3 py-3 text-sm text-[var(--foreground-muted)]">
+                  <p className="break-words font-medium text-[var(--foreground)]">
+                    {adminIdentity.email}
+                  </p>
+                  <p className="mt-1 break-words">
+                    {adminIdentity.isSuperuser
+                      ? "superuser"
+                      : `admin_role · ${adminIdentity.adminRole || "admin"}`}
+                  </p>
+                </div>
+              ) : null}
             </div>
             <ThemeToggle />
           </div>

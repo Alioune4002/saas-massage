@@ -12,6 +12,7 @@ class AdminSupportAndAnalyticsApiTests(APITestCase):
             username="admin-support",
             password="Password123!",
             role=User.Role.ADMIN,
+            admin_role=User.AdminRole.ADMIN,
         )
         self.practitioner = User.objects.create_user(
             email="pro-support@example.com",
@@ -61,3 +62,47 @@ class AdminSupportAndAnalyticsApiTests(APITestCase):
         response = self.client.get("/api/admin/analytics/overview")
         self.assertEqual(response.status_code, 200)
         self.assertIn("kpis", response.data)
+
+    def test_professional_cannot_access_admin_users(self):
+        self.client.force_authenticate(self.practitioner)
+        response = self.client.get("/api/admin/users")
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_can_suspend_and_reactivate_user_with_bulk_action(self):
+        self.client.force_authenticate(self.admin)
+
+        suspend_response = self.client.post(
+            "/api/admin/users/bulk-action",
+            {
+                "ids": [str(self.practitioner.id)],
+                "action": "suspend",
+            },
+            format="json",
+        )
+        self.assertEqual(suspend_response.status_code, 200)
+        self.practitioner.refresh_from_db()
+        self.assertFalse(self.practitioner.is_active)
+
+        reactivate_response = self.client.post(
+            "/api/admin/users/bulk-action",
+            {
+                "ids": [str(self.practitioner.id)],
+                "action": "reactivate",
+            },
+            format="json",
+        )
+        self.assertEqual(reactivate_response.status_code, 200)
+        self.practitioner.refresh_from_db()
+        self.assertTrue(self.practitioner.is_active)
+
+    def test_superuser_can_access_admin_users_even_without_role_admin(self):
+        superuser = User.objects.create_superuser(
+            email="root-admin@example.com",
+            username="root-admin",
+            password="Password123!",
+        )
+        self.client.force_authenticate(superuser)
+
+        response = self.client.get("/api/admin/users")
+
+        self.assertEqual(response.status_code, 200)

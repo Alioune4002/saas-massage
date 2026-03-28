@@ -380,6 +380,7 @@ export type MeResponse = {
   first_name: string;
   last_name: string;
   role: string;
+  is_superuser: boolean;
   admin_role: "" | "admin" | "moderator" | "support" | "ops";
   admin_capabilities: {
     dashboard?: boolean;
@@ -598,22 +599,31 @@ export type AdminAnalyticsOverview = {
 export type AdminDashboardOverview = {
   snapshot_at: string;
   widgets: {
+    users_total: number;
     practitioners_total: number;
     new_signups_day: number;
     new_signups_week: number;
+    new_signups_month: number;
     bookings_total: number;
     bookings_last_week: number;
+    bookings_last_month: number;
     revenue_total_eur: string;
     revenue_last_month_eur: string;
     conversion_visit_to_booking: number;
     open_incidents: number;
+    active_campaigns: number;
     growing_cities: number;
     activated_practitioners: number;
+    pending_profile_reviews: number;
+    pending_claims: number;
+    pending_verifications: number;
   };
   charts: {
     traffic: Array<{ date: string; value: number }>;
     bookings: Array<{ date: string; value: number }>;
+    signups: Array<{ date: string; value: number }>;
     activation: Array<{ date: string; value: number }>;
+    incidents: Array<{ date: string; value: number }>;
   };
   top_cities: Array<{
     city_slug: string;
@@ -633,6 +643,42 @@ export type AdminDashboardOverview = {
     bookings_count: number;
     is_public: boolean;
   }>;
+  priority_cities: Array<{
+    city_slug: string;
+    city_label: string;
+    coverage_percent: number;
+    recommended_action: string;
+  }>;
+  recently_active_practitioners: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    city: string;
+    updated_at: string;
+  }>;
+  recent_critical_incidents: Array<{
+    id: string;
+    category: string;
+    severity: string;
+    status: string;
+    professional_name: string;
+    created_at: string;
+  }>;
+  recent_support_messages: Array<{
+    id: string;
+    title: string;
+    category: string;
+    recipient_email: string;
+    is_read: boolean;
+    sent_at: string;
+  }>;
+  recent_platform_events: Array<{
+    id: string;
+    path: string;
+    page_group: string;
+    visitor_type: string;
+    occurred_at: string;
+  }>;
 };
 
 export type AdminUserDirectoryRecord = AdminSupportUser & {
@@ -642,6 +688,10 @@ export type AdminUserDirectoryRecord = AdminSupportUser & {
   incidents_count: number;
   payments_total_eur: string;
   public_profile_url: string;
+  is_public_profile: boolean;
+  verification_badge_status: "none" | "pending" | "verified" | "suspended" | "expired";
+  profile_visibility_score: number;
+  payment_account_status: string;
 };
 
 export type AdminCampaignOverview = {
@@ -2371,11 +2421,14 @@ export async function getAdminUsers(filters?: {
   role?: string;
   status?: "active" | "suspended";
   city?: string;
+  verification?: "verified" | "unverified";
+  public_status?: "public" | "private";
+  incidented?: boolean;
 }) {
   const params = new URLSearchParams();
   Object.entries(filters || {}).forEach(([key, value]) => {
-    if (value) {
-      params.set(key, value);
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value));
     }
   });
   return apiRequest<AdminUserDirectoryRecord[]>(
@@ -2396,6 +2449,32 @@ export async function updateAdminUser(
     auth: true,
     body: JSON.stringify(payload),
   });
+}
+
+export async function bulkAdminUsersAction(payload: {
+  ids: string[];
+  action:
+    | "suspend"
+    | "reactivate"
+    | "assign_support"
+    | "assign_moderation"
+    | "send_group_message"
+    | "export_csv";
+  title?: string;
+  body?: string;
+  category?: PlatformMessageRecord["category"];
+  display_mode?: PlatformMessageRecord["display_mode"];
+  reply_allowed?: boolean;
+  ticket_status?: "pending" | "treated";
+}) {
+  return apiRequest<{ updated?: number; created?: number; rows?: Array<Record<string, unknown>> }>(
+    "/admin/users/bulk-action",
+    {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(payload),
+    }
+  );
 }
 
 export async function getAdminCampaignOverview() {

@@ -31,6 +31,7 @@ class UserMeSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "role",
+            "is_superuser",
             "admin_role",
             "admin_capabilities",
             "onboarding_completed",
@@ -51,7 +52,7 @@ class UserMeSerializer(serializers.ModelSerializer):
         return profile.business_name if profile else ""
 
     def get_admin_capabilities(self, obj):
-        return get_admin_capabilities(obj) if obj.role == User.Role.ADMIN else {}
+        return get_admin_capabilities(obj) if (obj.role == User.Role.ADMIN or obj.is_superuser) else {}
 
 
 class LoginSerializer(serializers.Serializer):

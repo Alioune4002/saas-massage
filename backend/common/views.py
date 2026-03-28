@@ -5,6 +5,7 @@ from django.conf import settings
 from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
 from rest_framework import generics, permissions
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -54,6 +55,20 @@ def _request_hashes(request):
             hashlib.sha256(user_agent.encode()).hexdigest() if user_agent else ""
         ),
     }
+
+
+def _build_payment_account_status(profile):
+    account = getattr(profile, "payment_account", None) if profile else None
+    if not account:
+        return "non configuré"
+    if getattr(account, "charges_enabled", False) and getattr(account, "payouts_enabled", False):
+        return "actif"
+    onboarding_status = getattr(account, "onboarding_status", "") or ""
+    if onboarding_status:
+        return onboarding_status
+    if getattr(account, "stripe_account_id", ""):
+        return "configuration partielle"
+    return "non configuré"
 
 
 class RuntimeConfigView(APIView):
@@ -164,6 +179,9 @@ class AdminUserDirectoryView(generics.ListAPIView):
         role = self.request.query_params.get("role", "").strip()
         status_value = self.request.query_params.get("status", "").strip()
         city = self.request.query_params.get("city", "").strip()
+        verification = self.request.query_params.get("verification", "").strip()
+        public_status = self.request.query_params.get("public_status", "").strip()
+        incidented = self.request.query_params.get("incidented", "").strip()
         if query:
             queryset = queryset.filter(
                 Q(email__icontains=query)
@@ -179,6 +197,20 @@ class AdminUserDirectoryView(generics.ListAPIView):
             queryset = queryset.filter(is_active=False)
         if city:
             queryset = queryset.filter(professional_profile__city__icontains=city)
+        if verification == "verified":
+            queryset = queryset.filter(
+                professional_profile__verification_badge_status=ProfessionalProfile.VerificationBadgeStatus.VERIFIED
+            )
+        elif verification == "unverified":
+            queryset = queryset.exclude(
+                professional_profile__verification_badge_status=ProfessionalProfile.VerificationBadgeStatus.VERIFIED
+            )
+        if public_status == "public":
+            queryset = queryset.filter(professional_profile__is_public=True)
+        elif public_status == "private":
+            queryset = queryset.filter(
+                Q(professional_profile__is_public=False) | Q(professional_profile__is_public__isnull=True)
+            )
         return queryset.annotate(
             bookings_count=Count("professional_profile__bookings", distinct=True),
             incidents_count=Count("professional_profile__bookings__incidents", distinct=True),
@@ -188,8 +220,16 @@ class AdminUserDirectoryView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         payload = []
-        for user in self.get_queryset():
+        queryset = self.get_queryset()
+        incidented = self.request.query_params.get("incidented", "").strip()
+        for user in queryset:
             profile = getattr(user, "professional_profile", None)
+            ranking = build_profile_ranking_snapshot(profile) if profile else None
+            incidents_count = int(getattr(user, "incidents_count", 0) or 0)
+            if incidented == "true" and incidents_count <= 0:
+                continue
+            if incidented == "false" and incidents_count > 0:
+                continue
             payload.append(
                 {
                     "id": user.id,
@@ -204,9 +244,13 @@ class AdminUserDirectoryView(generics.ListAPIView):
                     "city": getattr(profile, "city", ""),
                     "bookings_count": int(getattr(user, "bookings_count", 0) or 0),
                     "average_rating": Decimal(getattr(user, "average_rating", 0) or 0).quantize(Decimal("0.01")),
-                    "incidents_count": int(getattr(user, "incidents_count", 0) or 0),
+                    "incidents_count": incidents_count,
                     "payments_total_eur": Decimal(getattr(user, "payments_total_eur", 0) or 0).quantize(Decimal("0.01")),
                     "public_profile_url": f"/{profile.slug}" if profile and profile.slug else "",
+                    "is_public_profile": bool(profile and profile.is_public),
+                    "verification_badge_status": getattr(profile, "verification_badge_status", ""),
+                    "profile_visibility_score": int((ranking or {}).get("profile_visibility_score", 0)),
+                    "payment_account_status": _build_payment_account_status(profile),
                     "date_joined": user.date_joined,
                 }
             )
@@ -218,6 +262,68 @@ class AdminUserDirectoryDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanManageAdminUsers]
     queryset = User.objects.select_related("professional_profile")
     serializer_class = AdminUserUpdateSerializer
+
+
+class AdminUserBulkActionView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanManageAdminUsers]
+
+    def post(self, request):
+        ids = request.data.get("ids") or []
+        action = str(request.data.get("action") or "").strip()
+        if not ids or not action:
+            raise ValidationError({"detail": "Sélection et action requises."})
+
+        queryset = User.objects.filter(id__in=ids)
+        if action == "suspend":
+            updated = queryset.update(is_active=False)
+            return Response({"updated": updated})
+        if action == "reactivate":
+            updated = queryset.update(is_active=True)
+            return Response({"updated": updated})
+        if action in {"assign_support", "assign_moderation", "send_group_message"}:
+            category = (
+                PlatformMessage.Category.SUPPORT
+                if action == "assign_support"
+                else PlatformMessage.Category.MODERATION
+                if action == "assign_moderation"
+                else request.data.get("category") or PlatformMessage.Category.PRODUCT
+            )
+            title = str(request.data.get("title") or "").strip() or "Message plateforme"
+            body = str(request.data.get("body") or "").strip() or "Un message vous a été adressé depuis NUADYX."
+            created = 0
+            for user in queryset:
+                PlatformMessage.objects.create(
+                    recipient_user=user,
+                    category=category,
+                    title=title,
+                    body=body,
+                    display_mode=request.data.get("display_mode") or PlatformMessage.DisplayMode.INBOX,
+                    reply_allowed=bool(request.data.get("reply_allowed")),
+                    created_by=request.user,
+                    metadata={
+                        "ticket_status": request.data.get("ticket_status") or "pending",
+                        "bulk_action": action,
+                    },
+                )
+                created += 1
+            return Response({"created": created})
+        if action == "export_csv":
+            rows = []
+            for user in queryset.select_related("professional_profile"):
+                profile = getattr(user, "professional_profile", None)
+                rows.append(
+                    {
+                        "id": str(user.id),
+                        "email": user.email,
+                        "role": user.role,
+                        "admin_role": getattr(user, "admin_role", ""),
+                        "is_active": user.is_active,
+                        "business_name": getattr(profile, "business_name", ""),
+                        "city": getattr(profile, "city", ""),
+                    }
+                )
+            return Response({"rows": rows})
+        raise ValidationError({"action": "Action bulk non reconnue."})
 
 
 class AdminSupportMessageListCreateView(generics.ListCreateAPIView):

@@ -12,7 +12,7 @@ from accounts.models import User
 from bookings.models import AccountRestriction, Booking, IncidentReport
 from directory.acquisition import list_city_growth_rows
 from directory.models import CityGrowthPlan, ContactCampaign, ImportedProfile, PractitionerClaim
-from professionals.models import DirectoryInterestLead, ProfessionalProfile
+from professionals.models import DirectoryInterestLead, PractitionerVerification, ProfessionalProfile
 
 from .models import AdminAnnouncement, PageViewEvent, PlatformMessage
 
@@ -50,8 +50,13 @@ def build_admin_dashboard_overview() -> dict:
         role=User.Role.PROFESSIONAL, date_joined__gte=last_week
     ).count()
     practitioners_total = ProfessionalProfile.objects.count()
+    users_total = User.objects.count()
+    practitioner_signups_month = User.objects.filter(
+        role=User.Role.PROFESSIONAL, date_joined__gte=last_month
+    ).count()
     bookings_total = Booking.objects.count()
     bookings_last_week = Booking.objects.filter(created_at__gte=last_week).count()
+    bookings_last_month = Booking.objects.filter(created_at__gte=last_month).count()
     completed_bookings = Booking.objects.filter(
         fulfillment_status__in=(
             Booking.FulfillmentStatus.COMPLETED_VALIDATED_BY_CLIENT,
@@ -76,6 +81,9 @@ def build_admin_dashboard_overview() -> dict:
     open_incidents = IncidentReport.objects.filter(
         status__in=(IncidentReport.Status.OPEN, IncidentReport.Status.IN_REVIEW)
     ).count()
+    active_campaigns = ContactCampaign.objects.filter(
+        status__in=(ContactCampaign.Status.READY, ContactCampaign.Status.SENDING)
+    ).count()
     growing_cities = CityGrowthPlan.objects.filter(
         growth_status__in=(
             CityGrowthPlan.GrowthStatus.SEED,
@@ -85,6 +93,27 @@ def build_admin_dashboard_overview() -> dict:
     ).count()
     activated_practitioners = ProfessionalProfile.objects.filter(
         onboarding_completed=True
+    ).count()
+    pending_profile_reviews = ImportedProfile.objects.filter(
+        import_status__in=(
+            ImportedProfile.ImportStatus.DRAFT_IMPORTED,
+            ImportedProfile.ImportStatus.PENDING_REVIEW,
+            ImportedProfile.ImportStatus.APPROVED_INTERNAL,
+        )
+    ).count()
+    pending_claims = PractitionerClaim.objects.filter(
+        status__in=(
+            PractitionerClaim.Status.SENT,
+            PractitionerClaim.Status.VIEWED,
+            PractitionerClaim.Status.INITIATED,
+            PractitionerClaim.Status.VERIFIED,
+        )
+    ).count()
+    pending_verifications = PractitionerVerification.objects.filter(
+        status__in=(
+            PractitionerVerification.Status.PENDING,
+            PractitionerVerification.Status.IN_REVIEW,
+        )
     ).count()
 
     conversion_visit_to_booking = round(
@@ -112,28 +141,88 @@ def build_admin_dashboard_overview() -> dict:
     return {
         "snapshot_at": now,
         "widgets": {
+            "users_total": users_total,
             "practitioners_total": practitioners_total,
             "new_signups_day": practitioner_signups_day,
             "new_signups_week": practitioner_signups_week,
+            "new_signups_month": practitioner_signups_month,
             "bookings_total": bookings_total,
             "bookings_last_week": bookings_last_week,
+            "bookings_last_month": bookings_last_month,
             "revenue_total_eur": str(revenue_total),
             "revenue_last_month_eur": str(revenue_last_month),
             "conversion_visit_to_booking": conversion_visit_to_booking,
             "open_incidents": open_incidents,
+            "active_campaigns": active_campaigns,
             "growing_cities": growing_cities,
             "activated_practitioners": activated_practitioners,
+            "pending_profile_reviews": pending_profile_reviews,
+            "pending_claims": pending_claims,
+            "pending_verifications": pending_verifications,
         },
         "charts": {
             "traffic": _bucket_daily(PageViewEvent.objects.all(), "occurred_at"),
             "bookings": _bucket_daily(Booking.objects.all(), "created_at"),
+            "signups": _bucket_daily(
+                User.objects.filter(role=User.Role.PROFESSIONAL),
+                "date_joined",
+            ),
             "activation": _bucket_daily(
                 ProfessionalProfile.objects.filter(onboarding_completed=True),
                 "updated_at",
             ),
+            "incidents": _bucket_daily(IncidentReport.objects.all(), "created_at"),
         },
         "top_cities": top_city_rows,
         "top_profiles": top_profiles,
+        "priority_cities": [row for row in top_city_rows if row.get("priority_level") in {"high", "critical"}][:6],
+        "recently_active_practitioners": [
+            {
+                "id": str(profile.id),
+                "name": profile.business_name,
+                "slug": profile.slug,
+                "city": profile.city,
+                "updated_at": profile.updated_at,
+            }
+            for profile in ProfessionalProfile.objects.order_by("-updated_at")[:8]
+        ],
+        "recent_critical_incidents": [
+            {
+                "id": str(incident.id),
+                "category": incident.category,
+                "severity": incident.severity,
+                "status": incident.status,
+                "professional_name": getattr(incident.booking.professional, "business_name", ""),
+                "created_at": incident.created_at,
+            }
+            for incident in IncidentReport.objects.filter(
+                severity__in=(
+                    IncidentReport.Severity.HIGH,
+                    IncidentReport.Severity.CRITICAL,
+                )
+            ).select_related("booking__professional").order_by("-created_at")[:8]
+        ],
+        "recent_support_messages": [
+            {
+                "id": str(message.id),
+                "title": message.title,
+                "category": message.category,
+                "recipient_email": message.recipient_user.email,
+                "is_read": message.is_read,
+                "sent_at": message.sent_at,
+            }
+            for message in PlatformMessage.objects.select_related("recipient_user").order_by("-sent_at")[:8]
+        ],
+        "recent_platform_events": [
+            {
+                "id": str(event.id),
+                "path": event.path,
+                "page_group": event.page_group,
+                "visitor_type": event.visitor_type,
+                "occurred_at": event.occurred_at,
+            }
+            for event in PageViewEvent.objects.order_by("-occurred_at")[:8]
+        ],
     }
 
 

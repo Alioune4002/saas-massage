@@ -112,6 +112,10 @@ class AdminUserSummarySerializer(serializers.Serializer):
     incidents_count = serializers.IntegerField(required=False)
     payments_total_eur = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     public_profile_url = serializers.CharField(allow_blank=True, required=False)
+    is_public_profile = serializers.BooleanField(required=False)
+    verification_badge_status = serializers.CharField(allow_blank=True, required=False)
+    profile_visibility_score = serializers.IntegerField(required=False)
+    payment_account_status = serializers.CharField(allow_blank=True, required=False)
     date_joined = serializers.DateTimeField()
 
 

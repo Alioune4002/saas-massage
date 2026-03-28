@@ -86,14 +86,21 @@ export function DashboardGlobal() {
         <>
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[
+              ["Utilisateurs", widgets.users_total],
               ["Praticiens", widgets.practitioners_total],
               ["Nouveaux inscrits aujourd’hui", widgets.new_signups_day],
               ["Nouveaux inscrits semaine", widgets.new_signups_week],
+              ["Nouveaux inscrits 30 jours", widgets.new_signups_month],
               ["Réservations totales", widgets.bookings_total],
               ["Réservations semaine", widgets.bookings_last_week],
+              ["Réservations 30 jours", widgets.bookings_last_month],
               ["Revenus capturés", `${widgets.revenue_total_eur} €`],
               ["Incidents ouverts", widgets.open_incidents],
+              ["Campagnes actives", widgets.active_campaigns],
               ["Villes en croissance", widgets.growing_cities],
+              ["Profils à reviewer", widgets.pending_profile_reviews],
+              ["Claims en attente", widgets.pending_claims],
+              ["Vérifications en attente", widgets.pending_verifications],
             ].map(([label, value]) => (
               <Card key={String(label)} className="rounded-[1.6rem] p-5">
                 <p className="text-sm text-[var(--foreground-muted)]">{label}</p>
@@ -155,10 +162,15 @@ export function DashboardGlobal() {
             </Card>
           </section>
 
-          <section className="grid gap-6 xl:grid-cols-3">
+          <section className="grid gap-6 xl:grid-cols-4">
             <MiniBarChart title="Évolution trafic" points={data.charts.traffic} />
             <MiniBarChart title="Évolution réservations" points={data.charts.bookings} />
+            <MiniBarChart title="Évolution inscriptions" points={data.charts.signups} />
             <MiniBarChart title="Activation praticiens" points={data.charts.activation} />
+          </section>
+
+          <section className="grid gap-6 xl:grid-cols-1">
+            <MiniBarChart title="Incidents dans le temps" points={data.charts.incidents} />
           </section>
 
           <section className="grid gap-6 xl:grid-cols-2">
@@ -211,9 +223,90 @@ export function DashboardGlobal() {
               </div>
             </Card>
           </section>
+
+          <section className="grid gap-6 xl:grid-cols-2">
+            <Card className="rounded-[1.8rem] p-5 md:p-6">
+              <h2 className="text-xl font-semibold text-[var(--foreground)]">Villes priorité haute</h2>
+              <div className="mt-5 space-y-3">
+                {data.priority_cities.map((city) => (
+                  <div key={city.city_slug} className="rounded-[1.3rem] border border-[var(--border)] bg-[var(--background-soft)] p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="break-words font-medium text-[var(--foreground)]">{city.city_label}</p>
+                      <p className="text-sm text-[var(--foreground-muted)]">{city.coverage_percent}%</p>
+                    </div>
+                    <p className="mt-2 break-words text-sm text-[var(--foreground-muted)]">
+                      {city.recommended_action}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="rounded-[1.8rem] p-5 md:p-6">
+              <h2 className="text-xl font-semibold text-[var(--foreground)]">Praticiens récemment actifs</h2>
+              <div className="mt-5 space-y-3">
+                {data.recently_active_practitioners.map((profile) => (
+                  <div key={profile.id} className="rounded-[1.3rem] border border-[var(--border)] bg-[var(--background-soft)] p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="break-words font-medium text-[var(--foreground)]">{profile.name}</p>
+                      <p className="text-sm text-[var(--foreground-muted)]">
+                        {new Date(profile.updated_at).toLocaleString("fr-FR")}
+                      </p>
+                    </div>
+                    <p className="mt-2 break-words text-sm text-[var(--foreground-muted)]">{profile.city}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </section>
+
+          <section className="grid gap-6 xl:grid-cols-3">
+            <Card className="rounded-[1.8rem] p-5 md:p-6">
+              <h2 className="text-xl font-semibold text-[var(--foreground)]">Incidents critiques récents</h2>
+              <div className="mt-5 space-y-3">
+                {data.recent_critical_incidents.map((incident) => (
+                  <div key={incident.id} className="rounded-[1.3rem] border border-[var(--border)] bg-[var(--background-soft)] p-4">
+                    <p className="break-words font-medium text-[var(--foreground)]">
+                      {incident.professional_name || "Praticien"} · {incident.category}
+                    </p>
+                    <p className="mt-1 break-words text-sm text-[var(--foreground-muted)]">
+                      {incident.severity} · {incident.status}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="rounded-[1.8rem] p-5 md:p-6">
+              <h2 className="text-xl font-semibold text-[var(--foreground)]">Derniers messages support</h2>
+              <div className="mt-5 space-y-3">
+                {data.recent_support_messages.map((message) => (
+                  <div key={message.id} className="rounded-[1.3rem] border border-[var(--border)] bg-[var(--background-soft)] p-4">
+                    <p className="break-words font-medium text-[var(--foreground)]">{message.title}</p>
+                    <p className="mt-1 break-words text-sm text-[var(--foreground-muted)]">
+                      {message.recipient_email} · {message.category} · {message.is_read ? "lu" : "non lu"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="rounded-[1.8rem] p-5 md:p-6">
+              <h2 className="text-xl font-semibold text-[var(--foreground)]">Derniers événements plateforme</h2>
+              <div className="mt-5 space-y-3">
+                {data.recent_platform_events.map((event) => (
+                  <div key={event.id} className="rounded-[1.3rem] border border-[var(--border)] bg-[var(--background-soft)] p-4">
+                    <p className="break-words font-medium text-[var(--foreground)]">{event.path}</p>
+                    <p className="mt-1 break-words text-sm text-[var(--foreground-muted)]">
+                      {event.page_group || "other"} · {event.visitor_type}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </section>
         </>
       ) : null}
     </div>
   );
 }
-
