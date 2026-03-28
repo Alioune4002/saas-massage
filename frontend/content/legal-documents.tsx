@@ -38,10 +38,25 @@ export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentSlug, string> = {
 
 const sharedHostSection = (
   <>
-    <p>Hébergeur front-end : Vercel</p>
-    <p>Adresse de l’hébergeur front-end : [À compléter avant mise en ligne]</p>
-    <p>Hébergeur back-end : Heroku</p>
-    <p>Adresse de l’hébergeur back-end : [À compléter avant mise en ligne]</p>
+    <p>Hébergeur front-end : Vercel Inc.</p>
+    <p>Adresse de l’hébergeur front-end : 440 N Barranca Ave #4133, Covina, CA 91723, United States</p>
+    <p>Hébergeur back-end : Heroku, Inc.</p>
+    <p>Adresse de l’hébergeur back-end : 415 Mission Street, Suite 300, San Francisco, CA 94105, United States</p>
+  </>
+);
+
+const consumerMediatorSection = (
+  <>
+    <p>Email de support : support@nuadyx.com</p>
+    <p>
+      Médiation de la consommation : ce bloc est réservé aux coordonnées définitives du médiateur
+      de la consommation applicable à NUADYX.
+    </p>
+    <p>
+      Coordonnées à publier dès adhésion effective : nom du médiateur, adresse postale et site
+      internet.
+    </p>
+    <p>Les présentes CGV sont soumises au droit français.</p>
   </>
 );
 
@@ -288,7 +303,7 @@ export const LEGAL_DOCUMENTS: Record<LegalDocumentSlug, LegalDocumentDefinition>
     title: "Conditions Générales de Vente",
     version: LEGAL_DOCUMENT_VERSIONS.cgv,
     introduction:
-      "Conditions commerciales applicables aux offres payantes de NUADYX, à compléter sur les éléments de prix et de médiation avant commercialisation.",
+      "Conditions commerciales applicables aux offres payantes de NUADYX et aux conditions de souscription lorsqu’une offre monétisée est ouverte.",
     sections: [
       {
         title: "Éditeur et objet",
@@ -359,15 +374,7 @@ export const LEGAL_DOCUMENTS: Record<LegalDocumentSlug, LegalDocumentDefinition>
       },
       {
         title: "Support, médiation et droit applicable",
-        content: (
-          <>
-            <p>Email de support : support@nuadyx.com</p>
-            <p>Médiateur de la consommation : [À compléter après adhésion]</p>
-            <p>Adresse : [À compléter]</p>
-            <p>Site internet : [À compléter]</p>
-            <p>Les présentes CGV sont soumises au droit français.</p>
-          </>
-        ),
+        content: consumerMediatorSection,
       },
     ],
   },

@@ -7,12 +7,26 @@ class User(AbstractUser):
         ADMIN = "admin", "Admin"
         PROFESSIONAL = "professional", "Professionnel"
 
+    class AdminRole(models.TextChoices):
+        NONE = "", "Aucun"
+        ADMIN = "admin", "Admin"
+        MODERATOR = "moderator", "Modérateur"
+        SUPPORT = "support", "Support"
+        OPS = "ops", "Ops"
+
     email = models.EmailField("email", unique=True)
     role = models.CharField(
         "rôle",
         max_length=20,
         choices=Role.choices,
         default=Role.PROFESSIONAL,
+    )
+    admin_role = models.CharField(
+        "rôle admin interne",
+        max_length=20,
+        choices=AdminRole.choices,
+        default=AdminRole.NONE,
+        blank=True,
     )
 
     USERNAME_FIELD = "email"

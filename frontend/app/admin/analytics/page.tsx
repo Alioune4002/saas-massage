@@ -1,7 +1,10 @@
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AnalyticsDashboard } from "@/components/admin/analytics-dashboard";
+import { requireAdminAccess } from "@/lib/admin-access";
 
-export default function AdminAnalyticsPage() {
+export default async function AdminAnalyticsPage() {
+  await requireAdminAccess("analytics");
+
   return (
     <AdminShell
       title="Analytics / KPI / conversions"

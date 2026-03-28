@@ -380,11 +380,17 @@ export type MeResponse = {
   first_name: string;
   last_name: string;
   role: string;
+  admin_role: "" | "admin" | "moderator" | "support" | "ops";
   admin_capabilities: {
+    dashboard?: boolean;
     ops?: boolean;
+    users?: boolean;
     moderation?: boolean;
+    campaigns?: boolean;
     support?: boolean;
     analytics?: boolean;
+    ranking?: boolean;
+    settings?: boolean;
     super_admin?: boolean;
   };
   onboarding_completed: boolean;
@@ -398,9 +404,16 @@ export type AdminSupportUser = {
   first_name: string;
   last_name: string;
   role: "admin" | "professional";
+  admin_role?: "" | "admin" | "moderator" | "support" | "ops";
   is_active: boolean;
   professional_slug: string;
   professional_name: string;
+  city?: string;
+  bookings_count?: number;
+  average_rating?: string;
+  incidents_count?: number;
+  payments_total_eur?: string;
+  public_profile_url?: string;
   date_joined: string;
 };
 
@@ -545,9 +558,19 @@ export type ModerationOverview = {
 
 export type AdminAnalyticsOverview = {
   snapshot_at: string;
-  kpis: Record<string, number>;
+  filters?: {
+    city?: string;
+    visitor_type?: string;
+    days?: number;
+  };
+  kpis: Record<string, number | string>;
   ratios: Record<string, number>;
   tracking_notes: Record<string, string>;
+  charts: {
+    traffic: Array<{ date: string; value: number }>;
+    bookings: Array<{ date: string; value: number }>;
+    activation: Array<{ date: string; value: number }>;
+  };
   top_cities: Array<{
     city_slug: string;
     city_label: string;
@@ -557,6 +580,114 @@ export type AdminAnalyticsOverview = {
     priority_level: "low" | "medium" | "high" | "critical";
     recommended_action: string;
   }>;
+  top_profiles: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    city: string;
+    average_rating: number;
+    bookings_count: number;
+  }>;
+  traffic_by_city: Array<{
+    city_slug: string;
+    city_label: string;
+    pageviews: number;
+  }>;
+};
+
+export type AdminDashboardOverview = {
+  snapshot_at: string;
+  widgets: {
+    practitioners_total: number;
+    new_signups_day: number;
+    new_signups_week: number;
+    bookings_total: number;
+    bookings_last_week: number;
+    revenue_total_eur: string;
+    revenue_last_month_eur: string;
+    conversion_visit_to_booking: number;
+    open_incidents: number;
+    growing_cities: number;
+    activated_practitioners: number;
+  };
+  charts: {
+    traffic: Array<{ date: string; value: number }>;
+    bookings: Array<{ date: string; value: number }>;
+    activation: Array<{ date: string; value: number }>;
+  };
+  top_cities: Array<{
+    city_slug: string;
+    city_label: string;
+    active_profiles: number;
+    claimed_profiles: number;
+    objective_profiles_total: number;
+    coverage_percent: number;
+    recommended_action: string;
+  }>;
+  top_profiles: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    city: string;
+    average_rating: number;
+    bookings_count: number;
+    is_public: boolean;
+  }>;
+};
+
+export type AdminUserDirectoryRecord = AdminSupportUser & {
+  city: string;
+  bookings_count: number;
+  average_rating: string;
+  incidents_count: number;
+  payments_total_eur: string;
+  public_profile_url: string;
+};
+
+export type AdminCampaignOverview = {
+  summary: {
+    total_campaigns: number;
+    active_campaigns: number;
+    sent_messages: number;
+    failed_messages: number;
+  };
+};
+
+export type AdminRankingRow = {
+  id: string;
+  slug: string;
+  business_name: string;
+  city: string;
+  is_public: boolean;
+  verification_badge_status: "none" | "pending" | "verified" | "suspended" | "expired";
+  manual_visibility_boost: number;
+  profile_completeness_score: number;
+  profile_visibility_score: number;
+  ranking_signals: {
+    services_count: number;
+    open_slots_count: number;
+    reviews_count: number;
+    bookings_count: number;
+    completed_bookings_count: number;
+    manual_visibility_boost: number;
+    low_quality_signals: number;
+    accepts_online_booking: boolean;
+    verification_badge_status: "none" | "pending" | "verified" | "suspended" | "expired";
+  };
+};
+
+export type AdminPlatformSettingsSnapshot = {
+  platform: {
+    frontend_app_url: string;
+    stripe_live_enabled: boolean;
+    stripe_internal_test_mode: boolean;
+    cookie_consent_enabled: boolean;
+    practitioner_verification_enabled: boolean;
+    review_replies_enabled: boolean;
+  };
+  defaults: Record<string, string | number>;
+  support: Record<string, string | number>;
+  safety: Record<string, string | number | boolean>;
 };
 
 export type DashboardProfileRankingSignals = {
@@ -853,7 +984,14 @@ export type ContactCampaignRecord = {
   id: string;
   name: string;
   source: string | null;
-  campaign_type: "claim_invite" | "incomplete_profile_nudge" | "source_recontact";
+  campaign_type:
+    | "claim_invite"
+    | "incomplete_profile_nudge"
+    | "source_recontact"
+    | "seo"
+    | "boost"
+    | "acquisition"
+    | "email";
   status: "draft" | "ready" | "sending" | "paused" | "completed" | "cancelled";
   campaign_scope_type: "global" | "city" | "department" | "region" | "source";
   campaign_scope_value: string;
@@ -862,6 +1000,8 @@ export type ContactCampaignRecord = {
   region: string;
   audience_filter_json: Record<string, unknown>;
   email_template_key: string;
+  campaign_message: string;
+  budget_eur: string | null;
   created_by_email: string;
   approved_by_email: string;
   approved_at: string | null;
@@ -1575,6 +1715,20 @@ export async function getMe() {
   });
 }
 
+export async function trackPageView(payload: {
+  path: string;
+  page_group?: string;
+  city_slug?: string;
+  referrer?: string;
+  session_key?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  return apiRequest<{ id: string }>("/analytics/page-views/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getMyPlatformMessages() {
   return apiRequest<MyPlatformMessagesResponse>("/me/platform-messages", {
     method: "GET",
@@ -2206,8 +2360,100 @@ export async function createAdminAnnouncement(payload: {
   });
 }
 
-export async function getAdminAnalyticsOverview() {
-  return apiRequest<AdminAnalyticsOverview>("/admin/analytics/overview", {
+export async function getAdminDashboardOverview() {
+  return apiRequest<AdminDashboardOverview>("/admin/dashboard/overview", {
+    auth: true,
+  });
+}
+
+export async function getAdminUsers(filters?: {
+  q?: string;
+  role?: string;
+  status?: "active" | "suspended";
+  city?: string;
+}) {
+  const params = new URLSearchParams();
+  Object.entries(filters || {}).forEach(([key, value]) => {
+    if (value) {
+      params.set(key, value);
+    }
+  });
+  return apiRequest<AdminUserDirectoryRecord[]>(
+    `/admin/users${params.toString() ? `?${params.toString()}` : ""}`,
+    { auth: true }
+  );
+}
+
+export async function updateAdminUser(
+  id: string,
+  payload: {
+    is_active?: boolean;
+    admin_role?: "" | "admin" | "moderator" | "support" | "ops";
+  }
+) {
+  return apiRequest<AdminUserDirectoryRecord>(`/admin/users/${id}`, {
+    method: "PATCH",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAdminCampaignOverview() {
+  return apiRequest<AdminCampaignOverview>("/admin/campaigns/overview", {
+    auth: true,
+  });
+}
+
+export async function getAdminAnalyticsOverview(filters?: {
+  city?: string;
+  visitor_type?: "anonymous" | "professional" | "admin";
+  days?: number;
+}) {
+  const params = new URLSearchParams();
+  Object.entries(filters || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value));
+    }
+  });
+  return apiRequest<AdminAnalyticsOverview>(
+    `/admin/analytics/overview${params.toString() ? `?${params.toString()}` : ""}`,
+    {
+      auth: true,
+    }
+  );
+}
+
+export async function getAdminRanking(filters?: {
+  q?: string;
+  city?: string;
+}) {
+  const params = new URLSearchParams();
+  Object.entries(filters || {}).forEach(([key, value]) => {
+    if (value) {
+      params.set(key, value);
+    }
+  });
+  return apiRequest<{ results: AdminRankingRow[] }>(
+    `/admin/ranking${params.toString() ? `?${params.toString()}` : ""}`,
+    {
+      auth: true,
+    }
+  );
+}
+
+export async function updateAdminRankingBoost(profileId: string, manualVisibilityBoost: number) {
+  return apiRequest<AdminRankingRow>("/admin/ranking", {
+    method: "PATCH",
+    auth: true,
+    body: JSON.stringify({
+      profile_id: profileId,
+      manual_visibility_boost: manualVisibilityBoost,
+    }),
+  });
+}
+
+export async function getAdminPlatformSettings() {
+  return apiRequest<AdminPlatformSettingsSnapshot>("/admin/settings", {
     auth: true,
   });
 }

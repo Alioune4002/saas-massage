@@ -1,23 +1,37 @@
 from django.urls import path
 
 from .views import (
+    AdminCampaignOverviewView,
+    AdminDashboardOverviewView,
     AdminAnalyticsOverviewView,
     AdminAnnouncementDetailView,
     AdminAnnouncementListCreateView,
+    AdminPlatformSettingsView,
+    AdminRankingOverviewView,
     AdminSupportMessageDetailView,
     AdminSupportMessageListCreateView,
     AdminSupportUserListView,
+    AdminUserDirectoryDetailView,
+    AdminUserDirectoryView,
     CookieConsentCreateView,
     LegalAcceptanceCreateView,
     MyPlatformMessageDetailView,
     MyPlatformMessageListView,
+    PageViewEventCreateView,
     RuntimeConfigView,
 )
 
 urlpatterns = [
     path("runtime-config/", RuntimeConfigView.as_view(), name="runtime-config"),
+    path("analytics/page-views/", PageViewEventCreateView.as_view(), name="analytics-page-views"),
     path("consents/cookies/", CookieConsentCreateView.as_view(), name="cookie-consent"),
     path("consents/legal/", LegalAcceptanceCreateView.as_view(), name="legal-acceptance"),
+    path("admin/dashboard/overview", AdminDashboardOverviewView.as_view(), name="admin-dashboard-overview"),
+    path("admin/users", AdminUserDirectoryView.as_view(), name="admin-users"),
+    path("admin/users/<uuid:pk>", AdminUserDirectoryDetailView.as_view(), name="admin-user-detail"),
+    path("admin/campaigns/overview", AdminCampaignOverviewView.as_view(), name="admin-campaigns-overview"),
+    path("admin/ranking", AdminRankingOverviewView.as_view(), name="admin-ranking"),
+    path("admin/settings", AdminPlatformSettingsView.as_view(), name="admin-platform-settings"),
     path("admin/support/users", AdminSupportUserListView.as_view(), name="admin-support-users"),
     path("admin/support/messages", AdminSupportMessageListCreateView.as_view(), name="admin-support-messages"),
     path("admin/support/messages/<uuid:pk>", AdminSupportMessageDetailView.as_view(), name="admin-support-message-detail"),

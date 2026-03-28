@@ -419,6 +419,10 @@ class ContactCampaign(TimeStampedUUIDModel):
         CLAIM_INVITE = "claim_invite", "Invitation de revendication"
         INCOMPLETE_PROFILE_NUDGE = "incomplete_profile_nudge", "Relance fiche incomplète"
         SOURCE_RECONTACT = "source_recontact", "Recontact source"
+        SEO = "seo", "SEO local"
+        BOOST = "boost", "Mise en avant"
+        ACQUISITION = "acquisition", "Acquisition"
+        EMAIL = "email", "Email"
 
     class ScopeType(models.TextChoices):
         GLOBAL = "global", "Global"
@@ -456,6 +460,13 @@ class ContactCampaign(TimeStampedUUIDModel):
     region = models.CharField(max_length=120, blank=True)
     audience_filter_json = models.JSONField(default=dict, blank=True)
     email_template_key = models.CharField(max_length=80)
+    campaign_message = models.TextField(blank=True)
+    budget_eur = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

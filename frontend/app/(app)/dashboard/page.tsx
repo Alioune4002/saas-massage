@@ -44,6 +44,7 @@ import {
   buildSpaceChecklist,
   consumeWelcomeNotice,
 } from "@/lib/practitioner-space";
+import { getStoredUser } from "@/lib/auth";
 import {
   formatDateTime,
   formatTime,
@@ -61,6 +62,7 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [copyNotice, setCopyNotice] = useState("");
   const [welcomeNotice, setWelcomeNotice] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -97,6 +99,7 @@ export default function DashboardPage() {
     }
 
     setWelcomeNotice(consumeWelcomeNotice());
+    setIsAdmin(getStoredUser()?.role === "admin");
     void load();
     return () => {
       active = false;
@@ -147,6 +150,13 @@ export default function DashboardPage() {
         description="Retrouve en un coup d’œil tes prestations, tes créneaux, tes réservations clients et la visibilité de ton profil public."
         action={
           <div className="flex flex-col gap-3 sm:flex-row">
+            {isAdmin ? (
+              <Link href="/admin">
+                <Button variant="ghost" size="lg">
+                  Ouvrir l’admin
+                </Button>
+              </Link>
+            ) : null}
             {profile?.slug ? (
               <Link href={`/${profile.slug}`} target="_blank">
                 <Button

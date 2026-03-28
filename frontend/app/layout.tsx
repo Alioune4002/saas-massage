@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { JetBrains_Mono, Manrope } from "next/font/google";
 
 import { CookieConsentProvider } from "@/components/providers/cookie-consent-provider";
 import { GlobalServiceBanner } from "@/components/layout/global-service-banner";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { BackendStatusProvider } from "@/components/providers/backend-status-provider";
+import { PageViewTracker } from "@/components/providers/page-view-tracker";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import "./globals.css";
 
@@ -94,6 +96,9 @@ export default function RootLayout({
         <ThemeProvider>
           <BackendStatusProvider>
             <CookieConsentProvider>
+              <Suspense fallback={null}>
+                <PageViewTracker />
+              </Suspense>
               <div className="flex min-h-screen flex-col">
                 <GlobalServiceBanner />
                 <div className="flex-1">{children}</div>

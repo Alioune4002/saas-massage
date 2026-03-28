@@ -1,11 +1,13 @@
 from django.utils import timezone
 from rest_framework import serializers
 
+from accounts.models import User
 from .legal import COOKIE_CONSENT_VERSION, LEGAL_DOCUMENTS
 from .models import (
     AdminAnnouncement,
     CookieConsentRecord,
     LegalAcceptanceRecord,
+    PageViewEvent,
     PlatformMessage,
 )
 
@@ -100,10 +102,54 @@ class AdminUserSummarySerializer(serializers.Serializer):
     first_name = serializers.CharField(allow_blank=True)
     last_name = serializers.CharField(allow_blank=True)
     role = serializers.CharField()
+    admin_role = serializers.CharField(allow_blank=True, required=False)
     is_active = serializers.BooleanField()
     professional_slug = serializers.CharField(allow_blank=True)
     professional_name = serializers.CharField(allow_blank=True)
+    city = serializers.CharField(allow_blank=True, required=False)
+    bookings_count = serializers.IntegerField(required=False)
+    average_rating = serializers.DecimalField(max_digits=4, decimal_places=2, required=False)
+    incidents_count = serializers.IntegerField(required=False)
+    payments_total_eur = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    public_profile_url = serializers.CharField(allow_blank=True, required=False)
     date_joined = serializers.DateTimeField()
+
+
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ("is_active", "admin_role")
+
+
+class PageViewEventCreateSerializer(serializers.Serializer):
+    path = serializers.CharField(max_length=255)
+    page_group = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    city_slug = serializers.CharField(max_length=170, required=False, allow_blank=True)
+    referrer = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    session_key = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    metadata = serializers.JSONField(required=False)
+
+    def create(self, validated_data):
+        request = self.context["request"]
+        user = request.user if getattr(request.user, "is_authenticated", False) else None
+        visitor_type = PageViewEvent.VisitorType.ANONYMOUS
+        if user:
+            visitor_type = (
+                PageViewEvent.VisitorType.ADMIN
+                if getattr(user, "role", "") == "admin"
+                else PageViewEvent.VisitorType.PROFESSIONAL
+            )
+        return PageViewEvent.objects.create(
+            user=user,
+            visitor_type=visitor_type,
+            path=validated_data["path"][:255],
+            page_group=validated_data.get("page_group", "")[:80],
+            city_slug=validated_data.get("city_slug", "")[:170],
+            referrer=validated_data.get("referrer", "")[:255],
+            session_key=validated_data.get("session_key", "")[:120],
+            metadata=validated_data.get("metadata", {}),
+            occurred_at=timezone.now(),
+        )
 
 
 class PlatformMessageSerializer(serializers.ModelSerializer):

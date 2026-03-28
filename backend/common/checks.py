@@ -62,6 +62,14 @@ def nuadyx_configuration_checks(app_configs, **kwargs):
             )
         )
 
+    if not settings.DEBUG and "localhost" in settings.FRONTEND_APP_URL:
+        issues.append(
+            Warning(
+                "FRONTEND_APP_URL pointe encore vers localhost. Utilisez l’URL publique réelle du front en production.",
+                id="nuadyx.W007",
+            )
+        )
+
     if not settings.DEBUG and not bool(getattr(settings, "DATABASES", {}).get("default", {}).get("HOST")):
         issues.append(
             Warning(
@@ -87,6 +95,22 @@ def nuadyx_configuration_checks(app_configs, **kwargs):
             Warning(
                 "DJANGO_ALLOWED_HOSTS semble resté sur les valeurs locales par défaut.",
                 id="nuadyx.W004",
+            )
+        )
+
+    if not settings.DEBUG and any("localhost" in origin for origin in settings.CSRF_TRUSTED_ORIGINS):
+        issues.append(
+            Warning(
+                "DJANGO_CSRF_TRUSTED_ORIGINS contient encore localhost. Utilisez uniquement les domaines publics réels en production.",
+                id="nuadyx.W008",
+            )
+        )
+
+    if not settings.DEBUG and any("localhost" in origin for origin in settings.CORS_ALLOWED_ORIGINS):
+        issues.append(
+            Warning(
+                "DJANGO_CORS_ALLOWED_ORIGINS contient encore localhost. Utilisez uniquement les domaines autorisés du front en production.",
+                id="nuadyx.W009",
             )
         )
 

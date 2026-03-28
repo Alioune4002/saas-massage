@@ -132,11 +132,11 @@ export function SupportDashboard() {
   const selectedUser = users.find((user) => user.id === selectedUserId) || null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-clip">
       {error ? <Notice tone="error">{error}</Notice> : null}
       {notice ? <Notice tone="success">{notice}</Notice> : null}
 
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
           ["Utilisateurs visibles", users.length],
           ["Messages envoyés", messages.length],
@@ -150,16 +150,16 @@ export function SupportDashboard() {
         ))}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card className="rounded-[1.8rem] p-6">
+      <section className="grid gap-6 2xl:grid-cols-[0.95fr_1.05fr]">
+        <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
           <h2 className="text-2xl font-semibold text-[var(--foreground)]">Utilisateurs</h2>
-          <form onSubmit={handleSearch} className="mt-4 flex gap-3">
+          <form onSubmit={handleSearch} className="mt-4 flex flex-col gap-3 sm:flex-row">
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="email, nom ou praticien"
             />
-            <Button type="submit" variant="secondary">Filtrer</Button>
+            <Button type="submit" variant="secondary" className="sm:self-start">Filtrer</Button>
           </form>
 
           <div className="mt-5 space-y-3">
@@ -174,10 +174,10 @@ export function SupportDashboard() {
                     : "border-[var(--border)] bg-[var(--background-soft)]"
                 }`}
               >
-                <p className="font-medium text-[var(--foreground)]">
+                <p className="break-words font-medium text-[var(--foreground)]">
                   {user.professional_name || `${user.first_name} ${user.last_name}`.trim() || user.email}
                 </p>
-                <p className="mt-1 text-sm text-[var(--foreground-muted)]">
+                <p className="mt-1 break-words text-sm text-[var(--foreground-muted)]">
                   {user.email} · {user.role}
                 </p>
               </button>
@@ -185,24 +185,24 @@ export function SupportDashboard() {
           </div>
         </Card>
 
-        <div className="space-y-6">
-          <Card className="rounded-[1.8rem] p-6">
+        <div className="min-w-0 space-y-6">
+          <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
             <h2 className="text-2xl font-semibold text-[var(--foreground)]">Envoyer un message plateforme</h2>
             <p className="mt-3 text-sm leading-7 text-[var(--foreground-muted)]">
               Message in-app lié à un utilisateur, avec affichage boîte de réception, bandeau ou popup.
             </p>
             <div className="mt-4 rounded-[1.3rem] border border-[var(--border)] bg-[var(--background-soft)] p-4 text-sm">
-              <p className="font-medium text-[var(--foreground)]">
+              <p className="break-words font-medium text-[var(--foreground)]">
                 {selectedUser?.professional_name || selectedUser?.email || "Aucun utilisateur sélectionné"}
               </p>
               {selectedUser ? (
-                <p className="mt-1 text-[var(--foreground-muted)]">
+                <p className="mt-1 break-words text-[var(--foreground-muted)]">
                   {selectedUser.email} · {selectedUser.role}
                 </p>
               ) : null}
             </div>
             <form onSubmit={handleSendMessage} className="mt-5 space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <FieldWrapper label="Catégorie">
                   <Select name="category" defaultValue="support">
                     <option value="support">support</option>
@@ -234,10 +234,10 @@ export function SupportDashboard() {
             </form>
           </Card>
 
-          <Card className="rounded-[1.8rem] p-6">
+          <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
             <h2 className="text-2xl font-semibold text-[var(--foreground)]">Annonces internes</h2>
             <form onSubmit={handleCreateAnnouncement} className="mt-5 space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <FieldWrapper label="Audience">
                   <Select name="audience_role" defaultValue="all">
                     <option value="all">Tous</option>
@@ -264,9 +264,35 @@ export function SupportDashboard() {
             <div className="mt-6 space-y-3">
               {announcements.slice(0, 6).map((item) => (
                 <div key={item.id} className="rounded-[1.3rem] border border-[var(--border)] bg-[var(--background-soft)] p-4 text-sm">
-                  <p className="font-medium text-[var(--foreground)]">{item.title}</p>
-                  <p className="mt-1 text-[var(--foreground-muted)]">
+                  <p className="break-words font-medium text-[var(--foreground)]">{item.title}</p>
+                  <p className="mt-1 break-words text-[var(--foreground-muted)]">
                     {item.audience_role} · {item.display_mode} · {item.is_active ? "active" : "inactive"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
+            <h2 className="text-2xl font-semibold text-[var(--foreground)]">Historique messages envoyés</h2>
+            <div className="mt-5 space-y-3">
+              {messages.slice(0, 8).map((item) => (
+                <div
+                  key={item.id}
+                  className="rounded-[1.3rem] border border-[var(--border)] bg-[var(--background-soft)] p-4 text-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="break-words font-medium text-[var(--foreground)]">{item.title}</p>
+                    <p className="text-[var(--foreground-muted)]">
+                      {item.is_read ? "lu" : "non lu"} ·{" "}
+                      {String(item.metadata?.ticket_status || "en attente")}
+                    </p>
+                  </div>
+                  <p className="mt-1 break-words text-[var(--foreground-muted)]">
+                    {item.recipient_name} · {item.category} · {item.display_mode}
+                  </p>
+                  <p className="mt-3 break-words text-[var(--foreground-muted)]">
+                    {item.body}
                   </p>
                 </div>
               ))}

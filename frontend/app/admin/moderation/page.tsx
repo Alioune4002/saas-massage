@@ -1,7 +1,10 @@
 import { AdminShell } from "@/components/admin/admin-shell";
 import { ModerationDashboard } from "@/components/admin/moderation-dashboard";
+import { requireAdminAccess } from "@/lib/admin-access";
 
-export default function AdminModerationPage() {
+export default async function AdminModerationPage() {
+  await requireAdminAccess("moderation");
+
   return (
     <AdminShell
       title="Modération / signalements / sanctions"

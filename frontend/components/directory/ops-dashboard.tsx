@@ -608,8 +608,8 @@ export function OpsDashboard() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 md:px-6">
-      <Card className="rounded-[2rem] p-6 md:p-8">
+    <main className="mx-auto max-w-7xl overflow-x-clip px-4 py-8 md:px-6">
+      <Card className="min-w-0 rounded-[2rem] p-6 md:p-8">
         <p className="text-xs uppercase tracking-[0.32em] text-[var(--primary)]/80">
           Ops local marketplace
         </p>
@@ -627,7 +627,7 @@ export function OpsDashboard() {
       {pageError ? <Notice tone="error" className="mt-6">{pageError}</Notice> : null}
       {pageSuccess ? <Notice tone="success" className="mt-6">{pageSuccess}</Notice> : null}
 
-      <section className="mt-6 grid gap-4 xl:grid-cols-5">
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {[
           ["Sources", String(sources.length)],
           ["Jobs d’import", String(jobs.length)],
@@ -642,8 +642,8 @@ export function OpsDashboard() {
         ))}
       </section>
 
-      <section className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="rounded-[1.8rem] p-6">
+      <section className="mt-6 grid gap-6 2xl:grid-cols-[1.2fr_0.8fr]">
+        <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-2xl font-semibold text-[var(--foreground)]">
@@ -653,7 +653,7 @@ export function OpsDashboard() {
                 Objectifs locaux, couverture réelle, priorités et conversion du pipeline.
               </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
               <FieldWrapper label="Ville">
                 <Input
                   value={cityFilters.city}
@@ -834,7 +834,7 @@ export function OpsDashboard() {
           </div>
         </Card>
 
-        <Card className="rounded-[1.8rem] p-6">
+        <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
           <h2 className="text-2xl font-semibold text-[var(--foreground)]">
             Ajouter une ville au cockpit
           </h2>
@@ -867,8 +867,8 @@ export function OpsDashboard() {
         </Card>
       </section>
 
-      <section className="mt-6 grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-        <Card className="rounded-[1.8rem] p-6">
+      <section className="mt-6 grid gap-6 2xl:grid-cols-[1.25fr_0.75fr]">
+        <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-2xl font-semibold text-[var(--foreground)]">
@@ -913,7 +913,7 @@ export function OpsDashboard() {
               </div>
 
               <form onSubmit={handleUpdateCityPlan} className="mt-5 space-y-4 rounded-[1.4rem] border border-[var(--border)] p-5">
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   <FieldWrapper label="Objectif profils">
                     <Input
                       type="number"
@@ -954,7 +954,7 @@ export function OpsDashboard() {
                     />
                   </FieldWrapper>
                 </div>
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   <FieldWrapper label="Priorité">
                     <Select
                       value={planForm.priority_level}
@@ -1012,7 +1012,7 @@ export function OpsDashboard() {
               </form>
 
               <div className="mt-5 grid gap-4 xl:grid-cols-2">
-                <Card className="rounded-[1.4rem] border border-[var(--border)] p-5">
+                <Card className="min-w-0 rounded-[1.4rem] border border-[var(--border)] p-5">
                   <h3 className="text-lg font-semibold text-[var(--foreground)]">Funnel acquisition</h3>
                   <div className="mt-4 space-y-3 text-sm text-[var(--foreground-muted)]">
                     {cityFunnel
@@ -1028,8 +1028,8 @@ export function OpsDashboard() {
                           ["Profils revendiqués", cityFunnel.profiles_claimed],
                           ["Profils publics actifs", cityFunnel.profiles_public_active],
                         ].map(([label, value]) => (
-                          <div key={String(label)} className="flex items-center justify-between gap-3">
-                            <span>{label}</span>
+                          <div key={String(label)} className="flex flex-wrap items-center justify-between gap-3">
+                            <span className="break-words">{label}</span>
                             <span className="font-medium text-[var(--foreground)]">{String(value)}</span>
                           </div>
                         ))
@@ -1037,7 +1037,7 @@ export function OpsDashboard() {
                   </div>
                 </Card>
 
-                <Card className="rounded-[1.4rem] border border-[var(--border)] p-5">
+                <Card className="min-w-0 rounded-[1.4rem] border border-[var(--border)] p-5">
                   <h3 className="text-lg font-semibold text-[var(--foreground)]">Recommandations</h3>
                   <div className="mt-4 space-y-3">
                     {selectedCity.recommendations.map((recommendation) => (
@@ -1052,14 +1052,14 @@ export function OpsDashboard() {
                 </Card>
               </div>
 
-              <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-                <Card className="rounded-[1.4rem] border border-[var(--border)] p-5">
+              <div className="mt-5 grid gap-4 2xl:grid-cols-[0.9fr_1.1fr]">
+                <Card className="min-w-0 rounded-[1.4rem] border border-[var(--border)] p-5">
                   <h3 className="text-lg font-semibold text-[var(--foreground)]">Campagne locale</h3>
                   <form onSubmit={handleCreateLocalCampaign} className="mt-4 space-y-4">
                     <FieldWrapper label="Nom de campagne">
                       <Input name="name" placeholder={`Invitation ${selectedCity.city_label}`} />
                     </FieldWrapper>
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <FieldWrapper label="Type">
                         <Select name="campaign_type" defaultValue="claim_invite">
                           <option value="claim_invite">claim_invite</option>
@@ -1077,12 +1077,12 @@ export function OpsDashboard() {
                   </form>
                 </Card>
 
-                <Card className="rounded-[1.4rem] border border-[var(--border)] p-5">
+                <Card className="min-w-0 rounded-[1.4rem] border border-[var(--border)] p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h3 className="text-lg font-semibold text-[var(--foreground)]">
                       Suggestions locales
                     </h3>
-                    <div className="min-w-[180px]">
+                    <div className="w-full sm:w-[220px]">
                       <Select
                         value={citySuggestionFilter}
                         onChange={(event) => setCitySuggestionFilter(event.target.value)}
@@ -1142,7 +1142,7 @@ export function OpsDashboard() {
               </div>
 
               <div className="mt-5 grid gap-4 xl:grid-cols-2">
-                <Card className="rounded-[1.4rem] border border-[var(--border)] p-5">
+                <Card className="min-w-0 rounded-[1.4rem] border border-[var(--border)] p-5">
                   <h3 className="text-lg font-semibold text-[var(--foreground)]">Profils liés à la ville</h3>
                   <div className="mt-4 space-y-3">
                     {cityProfiles.length ? (
@@ -1167,7 +1167,7 @@ export function OpsDashboard() {
                   </div>
                 </Card>
 
-                <Card className="rounded-[1.4rem] border border-[var(--border)] p-5">
+                <Card className="min-w-0 rounded-[1.4rem] border border-[var(--border)] p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h3 className="text-lg font-semibold text-[var(--foreground)]">Campagnes locales</h3>
                     {cityCampaigns.length ? (
@@ -1219,7 +1219,7 @@ export function OpsDashboard() {
           )}
         </Card>
 
-        <Card className="rounded-[1.8rem] p-6">
+        <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
           <h2 className="text-2xl font-semibold text-[var(--foreground)]">Blocages globaux</h2>
           <div className="mt-5 space-y-3">
             {globalSuggestions.slice(0, 8).map((item) => (
@@ -1246,7 +1246,7 @@ export function OpsDashboard() {
       </section>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-2">
-        <Card className="rounded-[1.8rem] p-6">
+        <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
           <h2 className="text-2xl font-semibold text-[var(--foreground)]">Créer une source</h2>
           <form onSubmit={handleCreateSource} className="mt-5 space-y-4">
             <FieldWrapper label="Nom de la source">
@@ -1268,7 +1268,7 @@ export function OpsDashboard() {
           </form>
         </Card>
 
-        <Card className="rounded-[1.8rem] p-6">
+        <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
           <h2 className="text-2xl font-semibold text-[var(--foreground)]">Import CSV</h2>
           <form onSubmit={handleCsvImport} className="mt-5 space-y-4">
             <FieldWrapper label="Source">
@@ -1292,8 +1292,8 @@ export function OpsDashboard() {
         </Card>
       </section>
 
-      <section className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="rounded-[1.8rem] p-6">
+      <section className="mt-6 grid gap-6 2xl:grid-cols-[1.2fr_0.8fr]">
+        <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-2xl font-semibold text-[var(--foreground)]">File de review</h2>
@@ -1355,7 +1355,7 @@ export function OpsDashboard() {
           </div>
         </Card>
 
-        <Card className="rounded-[1.8rem] p-6">
+        <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
           <h2 className="text-2xl font-semibold text-[var(--foreground)]">Créer une fiche candidate</h2>
           <form onSubmit={handleManualProfileCreate} className="mt-5 space-y-4">
             <FieldWrapper label="Nom public">
@@ -1390,7 +1390,7 @@ export function OpsDashboard() {
       </section>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-2">
-        <Card className="rounded-[1.8rem] p-6">
+        <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
           <h2 className="text-2xl font-semibold text-[var(--foreground)]">Jobs récents</h2>
           <div className="mt-5 space-y-3">
             {jobs.slice(0, 8).map((job) => (
@@ -1404,8 +1404,8 @@ export function OpsDashboard() {
           </div>
         </Card>
 
-        <Card className="rounded-[1.8rem] p-6">
-          <div className="flex items-center justify-between gap-3">
+        <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-2xl font-semibold text-[var(--foreground)]">Campagnes & suppressions</h2>
             <Button size="sm" onClick={() => handleSendCampaign()}>
               Envoyer une campagne test

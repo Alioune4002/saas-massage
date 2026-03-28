@@ -1,24 +1,42 @@
 import hashlib
+from decimal import Decimal
 
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
 from rest_framework import generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import User
-from common.permissions import CanManageSupport, CanViewAnalytics, IsAdminUser
+from common.permissions import (
+    CanManageAdminCampaigns,
+    CanManageAdminUsers,
+    CanManagePlatformSettings,
+    CanManageSupport,
+    CanViewAdminRanking,
+    CanViewAnalytics,
+    IsAdminUser,
+)
+from directory.models import ContactCampaign
+from professionals.models import ProfessionalProfile
+from professionals.ranking import build_profile_ranking_snapshot
 
-from .admin_dashboard import build_admin_analytics_overview
+from .admin_dashboard import (
+    build_admin_analytics_overview,
+    build_admin_dashboard_overview,
+    build_admin_platform_settings_snapshot,
+)
 from .legal import COOKIE_CONSENT_VERSION, LEGAL_DOCUMENTS
-from .models import AdminAnnouncement, PlatformMessage
+from .models import AdminAnnouncement, PageViewEvent, PlatformMessage
 from .serializers import (
     AdminAnnouncementSerializer,
     AdminUserSummarySerializer,
+    AdminUserUpdateSerializer,
     CookieConsentRecordSerializer,
     LegalAcceptanceSerializer,
     MyPlatformMessageSerializer,
+    PageViewEventCreateSerializer,
     PlatformMessageSerializer,
     RuntimeConfigSerializer,
 )
@@ -63,6 +81,11 @@ class RuntimeConfigView(APIView):
         return Response(serializer.validated_data)
 
 
+class PageViewEventCreateView(generics.CreateAPIView):
+    serializer_class = PageViewEventCreateSerializer
+    permission_classes = [permissions.AllowAny]
+
+
 class CookieConsentCreateView(generics.CreateAPIView):
     serializer_class = CookieConsentRecordSerializer
     permission_classes = [permissions.AllowAny]
@@ -81,6 +104,13 @@ class LegalAcceptanceCreateView(generics.CreateAPIView):
         context = super().get_serializer_context()
         context.update(_request_hashes(self.request))
         return context
+
+
+class AdminDashboardOverviewView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        return Response(build_admin_dashboard_overview())
 
 
 class AdminSupportUserListView(generics.ListAPIView):
@@ -113,6 +143,7 @@ class AdminSupportUserListView(generics.ListAPIView):
                     "first_name": user.first_name,
                     "last_name": user.last_name,
                     "role": user.role,
+                    "admin_role": getattr(user, "admin_role", ""),
                     "is_active": user.is_active,
                     "professional_slug": getattr(profile, "slug", ""),
                     "professional_name": getattr(profile, "business_name", ""),
@@ -121,6 +152,72 @@ class AdminSupportUserListView(generics.ListAPIView):
             )
         serializer = self.get_serializer(payload, many=True)
         return Response(serializer.data)
+
+
+class AdminUserDirectoryView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanManageAdminUsers]
+    serializer_class = AdminUserSummarySerializer
+
+    def get_queryset(self):
+        queryset = User.objects.select_related("professional_profile").order_by("-date_joined")
+        query = self.request.query_params.get("q", "").strip()
+        role = self.request.query_params.get("role", "").strip()
+        status_value = self.request.query_params.get("status", "").strip()
+        city = self.request.query_params.get("city", "").strip()
+        if query:
+            queryset = queryset.filter(
+                Q(email__icontains=query)
+                | Q(first_name__icontains=query)
+                | Q(last_name__icontains=query)
+                | Q(professional_profile__business_name__icontains=query)
+            )
+        if role:
+            queryset = queryset.filter(role=role)
+        if status_value == "active":
+            queryset = queryset.filter(is_active=True)
+        elif status_value == "suspended":
+            queryset = queryset.filter(is_active=False)
+        if city:
+            queryset = queryset.filter(professional_profile__city__icontains=city)
+        return queryset.annotate(
+            bookings_count=Count("professional_profile__bookings", distinct=True),
+            incidents_count=Count("professional_profile__bookings__incidents", distinct=True),
+            average_rating=Avg("professional_profile__reviews__rating"),
+            payments_total_eur=Sum("professional_profile__bookings__amount_received_eur"),
+        )[:200]
+
+    def list(self, request, *args, **kwargs):
+        payload = []
+        for user in self.get_queryset():
+            profile = getattr(user, "professional_profile", None)
+            payload.append(
+                {
+                    "id": user.id,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "role": user.role,
+                    "admin_role": getattr(user, "admin_role", ""),
+                    "is_active": user.is_active,
+                    "professional_slug": getattr(profile, "slug", ""),
+                    "professional_name": getattr(profile, "business_name", ""),
+                    "city": getattr(profile, "city", ""),
+                    "bookings_count": int(getattr(user, "bookings_count", 0) or 0),
+                    "average_rating": Decimal(getattr(user, "average_rating", 0) or 0).quantize(Decimal("0.01")),
+                    "incidents_count": int(getattr(user, "incidents_count", 0) or 0),
+                    "payments_total_eur": Decimal(getattr(user, "payments_total_eur", 0) or 0).quantize(Decimal("0.01")),
+                    "public_profile_url": f"/{profile.slug}" if profile and profile.slug else "",
+                    "date_joined": user.date_joined,
+                }
+            )
+        serializer = self.get_serializer(payload, many=True)
+        return Response(serializer.data)
+
+
+class AdminUserDirectoryDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanManageAdminUsers]
+    queryset = User.objects.select_related("professional_profile")
+    serializer_class = AdminUserUpdateSerializer
 
 
 class AdminSupportMessageListCreateView(generics.ListCreateAPIView):
@@ -164,6 +261,76 @@ class AdminAnnouncementDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanManageSupport]
     serializer_class = AdminAnnouncementSerializer
     queryset = AdminAnnouncement.objects.select_related("created_by")
+
+
+class AdminCampaignOverviewView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanManageAdminCampaigns]
+
+    def get(self, request):
+        campaigns = ContactCampaign.objects.order_by("-created_at")[:100]
+        return Response(
+            {
+                "summary": {
+                    "total_campaigns": ContactCampaign.objects.count(),
+                    "active_campaigns": ContactCampaign.objects.filter(
+                        status__in=(ContactCampaign.Status.READY, ContactCampaign.Status.SENDING)
+                    ).count(),
+                    "sent_messages": sum(campaign.total_sent for campaign in campaigns),
+                    "failed_messages": sum(campaign.total_failed for campaign in campaigns),
+                }
+            }
+        )
+
+
+class AdminRankingOverviewView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanViewAdminRanking]
+
+    def get(self, request):
+        city = request.query_params.get("city", "").strip()
+        query = request.query_params.get("q", "").strip()
+        queryset = ProfessionalProfile.objects.filter(is_public=True).select_related("user").order_by("-updated_at")
+        if city:
+            queryset = queryset.filter(city__icontains=city)
+        if query:
+            queryset = queryset.filter(
+                Q(business_name__icontains=query)
+                | Q(city__icontains=query)
+                | Q(user__email__icontains=query)
+            )
+        rows = []
+        for profile in queryset[:120]:
+            rows.append(
+                {
+                    "id": str(profile.id),
+                    "slug": profile.slug,
+                    "business_name": profile.business_name,
+                    "city": profile.city,
+                    "is_public": profile.is_public,
+                    "verification_badge_status": profile.verification_badge_status,
+                    "manual_visibility_boost": profile.manual_visibility_boost,
+                    **build_profile_ranking_snapshot(profile),
+                }
+            )
+        return Response({"results": rows})
+
+    def patch(self, request):
+        profile = generics.get_object_or_404(ProfessionalProfile, pk=request.data.get("profile_id"))
+        profile.manual_visibility_boost = int(request.data.get("manual_visibility_boost", 0))
+        profile.save(update_fields=["manual_visibility_boost", "updated_at"])
+        return Response(
+            {
+                "id": str(profile.id),
+                "manual_visibility_boost": profile.manual_visibility_boost,
+                **build_profile_ranking_snapshot(profile),
+            }
+        )
+
+
+class AdminPlatformSettingsView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanManagePlatformSettings]
+
+    def get(self, request):
+        return Response(build_admin_platform_settings_snapshot())
 
 
 class MyPlatformMessageListView(generics.ListAPIView):
@@ -214,4 +381,9 @@ class AdminAnalyticsOverviewView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminUser, CanViewAnalytics]
 
     def get(self, request):
-        return Response(build_admin_analytics_overview())
+        filters = {
+            "city": request.query_params.get("city", ""),
+            "visitor_type": request.query_params.get("visitor_type", ""),
+            "days": request.query_params.get("days", "30"),
+        }
+        return Response(build_admin_analytics_overview(filters))

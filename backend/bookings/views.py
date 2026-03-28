@@ -317,6 +317,10 @@ class PublicBookingTestPaymentConfirmView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, booking_id):
+        config = get_stripe_connect_config()
+        if not config.internal_test_mode:
+            raise ValidationError("Ce mode interne de règlement n’est pas disponible sur cet environnement.")
+
         booking = generics.get_object_or_404(Booking, id=booking_id)
         payment = booking.payments.order_by("-created_at").first()
         if not payment:

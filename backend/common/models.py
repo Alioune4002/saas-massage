@@ -149,6 +149,10 @@ class PlatformMessage(TimeStampedUUIDModel):
         permissions = [
             ("manage_support_messages", "Can manage support messages"),
             ("view_admin_analytics", "Can view admin analytics"),
+            ("manage_admin_users", "Can manage admin users"),
+            ("manage_admin_campaigns", "Can manage admin campaigns"),
+            ("view_admin_ranking", "Can view admin ranking"),
+            ("manage_platform_settings", "Can manage platform settings"),
         ]
         indexes = [
             models.Index(fields=("recipient_user", "is_read", "is_active")),
@@ -206,3 +210,45 @@ class AdminAnnouncement(TimeStampedUUIDModel):
 
     def __str__(self) -> str:
         return self.title
+
+
+class PageViewEvent(TimeStampedUUIDModel):
+    class VisitorType(models.TextChoices):
+        ANONYMOUS = "anonymous", "Visiteur"
+        PROFESSIONAL = "professional", "Praticien"
+        ADMIN = "admin", "Admin"
+
+    path = models.CharField("chemin", max_length=255)
+    page_group = models.CharField("groupe", max_length=80, blank=True)
+    city_slug = models.SlugField("ville", max_length=170, blank=True)
+    referrer = models.CharField("referrer", max_length=255, blank=True)
+    session_key = models.CharField("session locale", max_length=120, blank=True)
+    visitor_type = models.CharField(
+        max_length=20,
+        choices=VisitorType.choices,
+        default=VisitorType.ANONYMOUS,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="page_view_events",
+    )
+    occurred_at = models.DateTimeField("vu le", default=timezone.now)
+    metadata = models.JSONField("métadonnées", default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "événement de vue"
+        verbose_name_plural = "événements de vue"
+        ordering = ("-occurred_at", "-created_at")
+        indexes = [
+            models.Index(fields=("occurred_at",)),
+            models.Index(fields=("path",)),
+            models.Index(fields=("page_group",)),
+            models.Index(fields=("city_slug",)),
+            models.Index(fields=("visitor_type",)),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.path} @ {self.occurred_at:%Y-%m-%d %H:%M}"

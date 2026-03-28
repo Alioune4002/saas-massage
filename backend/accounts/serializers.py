@@ -31,6 +31,7 @@ class UserMeSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "role",
+            "admin_role",
             "admin_capabilities",
             "onboarding_completed",
             "professional_slug",

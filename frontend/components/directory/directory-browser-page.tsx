@@ -71,16 +71,16 @@ export function DirectoryBrowserPage({
   }, [city, locationSlug, locationType, query]);
 
   return (
-    <main className="px-4 py-4 md:px-6">
+    <main className="overflow-x-clip px-4 py-4 md:px-6">
       <SiteHeader mode="client" />
       <div className="mx-auto max-w-7xl py-4 md:py-6">
-      <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <Card className="rounded-[1.9rem] p-6 md:p-8">
+      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="min-w-0 rounded-[1.9rem] p-6 md:p-8">
           <Badge tone="info">Annuaire NUADYX</Badge>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-[var(--foreground)] md:text-5xl">
+          <h1 className="mt-4 break-words text-4xl font-semibold tracking-tight text-[var(--foreground)] md:text-5xl">
             {title}
           </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--foreground-muted)]">
+          <p className="mt-4 max-w-2xl break-words text-sm leading-7 text-[var(--foreground-muted)]">
             {description}
           </p>
           <div className="mt-6 max-w-xl">
@@ -103,7 +103,7 @@ export function DirectoryBrowserPage({
           </div>
         </Card>
 
-        <Card className="rounded-[1.9rem] p-6 md:p-8">
+        <Card className="min-w-0 rounded-[1.9rem] p-6 md:p-8">
           <p className="text-xs uppercase tracking-[0.32em] text-[var(--primary)]/80">
             Praticien
           </p>
@@ -114,7 +114,7 @@ export function DirectoryBrowserPage({
             Créez votre page praticien, présentez vos soins et commencez à recevoir
             des demandes de rendez-vous sans promesse trompeuse ni faux signaux d’activité.
           </p>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-6 flex flex-col gap-3 md:flex-row md:flex-wrap">
             <Link href="/inscription">
               <Button size="lg">Créer ma page praticien</Button>
             </Link>
@@ -133,7 +133,7 @@ export function DirectoryBrowserPage({
       </section>
 
       <section className="mt-8 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card className="rounded-[1.8rem] p-6">
+        <Card className="min-w-0 rounded-[1.8rem] p-6">
           <p className="text-xs uppercase tracking-[0.32em] text-[var(--primary)]/80">
             Besoin d’aide pour découvrir l’offre locale ?
           </p>
@@ -144,7 +144,7 @@ export function DirectoryBrowserPage({
             Si vous cherchez d’abord une ville, si vous voulez recommander un praticien
             ou suivre l’ouverture dans votre zone, utilisez l’entrée client dédiée.
           </p>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-6 flex flex-col gap-3 md:flex-row md:flex-wrap">
             <Link href="/trouver-un-praticien">
               <Button size="lg">Trouver un praticien</Button>
             </Link>
@@ -155,7 +155,7 @@ export function DirectoryBrowserPage({
             </Link>
           </div>
         </Card>
-        <Card className="rounded-[1.8rem] p-6">
+        <Card className="min-w-0 rounded-[1.8rem] p-6">
           <p className="text-xs uppercase tracking-[0.32em] text-[var(--primary)]/80">
             Praticien
           </p>
@@ -166,7 +166,7 @@ export function DirectoryBrowserPage({
             Présentation, soins, créneaux, photos, avis et réservation au même endroit.
             Rejoignez NUADYX pour créer votre page ou revendiquer une fiche existante.
           </p>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-6 flex flex-col gap-3 md:flex-row md:flex-wrap">
             <Link href="/inscription">
               <Button size="lg">Créer ma page praticien</Button>
             </Link>

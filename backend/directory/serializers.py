@@ -245,6 +245,8 @@ class ContactCampaignSerializer(serializers.ModelSerializer):
             "region",
             "audience_filter_json",
             "email_template_key",
+            "campaign_message",
+            "budget_eur",
             "created_by",
             "created_by_email",
             "approved_by",

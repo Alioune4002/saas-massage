@@ -47,6 +47,7 @@ def build_profile_ranking_snapshot(profile) -> dict:
         + min(completed_bookings_count * 3, 18)
         + (8 if profile.verification_badge_status == profile.VerificationBadgeStatus.VERIFIED else 0)
         + (4 if profile.accepts_online_booking else 0)
+        + int(profile.manual_visibility_boost or 0)
         - min(low_quality_signals * 8, 24),
     )
 
@@ -62,6 +63,7 @@ def build_profile_ranking_snapshot(profile) -> dict:
             "low_quality_signals": low_quality_signals,
             "verification_badge_status": profile.verification_badge_status,
             "accepts_online_booking": profile.accepts_online_booking,
+            "manual_visibility_boost": int(profile.manual_visibility_boost or 0),
             "completeness_signals": completeness_signals,
         },
     }

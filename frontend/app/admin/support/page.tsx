@@ -1,7 +1,10 @@
 import { AdminShell } from "@/components/admin/admin-shell";
 import { SupportDashboard } from "@/components/admin/support-dashboard";
+import { requireAdminAccess } from "@/lib/admin-access";
 
-export default function AdminSupportPage() {
+export default async function AdminSupportPage() {
+  await requireAdminAccess("support");
+
   return (
     <AdminShell
       title="Support / messages plateforme / annonces"

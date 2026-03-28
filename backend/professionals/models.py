@@ -201,6 +201,10 @@ class ProfessionalProfile(TimeStampedUUIDModel):
         choices=VerificationBadgeStatus.choices,
         default=VerificationBadgeStatus.NONE,
     )
+    manual_visibility_boost = models.IntegerField(
+        "ajustement manuel de visibilité",
+        default=0,
+    )
     acquisition_source = models.CharField(
         "source d'acquisition",
         max_length=20,

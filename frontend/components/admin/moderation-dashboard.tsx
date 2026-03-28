@@ -38,6 +38,33 @@ export function ModerationDashboard() {
     q: "",
   });
 
+  const relatedRiskEntries = riskEntries.filter((entry) => {
+    if (!selectedIncident) {
+      return false;
+    }
+    return (
+      (!!entry.professional_name &&
+        entry.professional_name === selectedIncident.professional_name) ||
+      (!!entry.client_email &&
+        entry.client_email === selectedIncident.client_email)
+    );
+  });
+  const relatedRestrictions = restrictions.filter((restriction) => {
+    if (!selectedIncident) {
+      return false;
+    }
+    return (
+      (!!restriction.professional_name &&
+        restriction.professional_name === selectedIncident.professional_name) ||
+      (!!restriction.client_email &&
+        restriction.client_email === selectedIncident.client_email)
+    );
+  });
+  const trustScore = Math.max(
+    0,
+    100 - relatedRiskEntries.length * 20 - relatedRestrictions.length * 15
+  );
+
   const loadAll = useCallback(async () => {
     const [overviewData, incidentsData, restrictionsData, riskData] = await Promise.all([
       getAdminModerationOverview(),
@@ -174,11 +201,11 @@ export function ModerationDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-clip">
       {error ? <Notice tone="error">{error}</Notice> : null}
       {notice ? <Notice tone="success">{notice}</Notice> : null}
 
-      <section className="grid gap-4 md:grid-cols-5">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {overview
           ? [
               ["Signalements ouverts", overview.open_incidents],
@@ -195,9 +222,9 @@ export function ModerationDashboard() {
           : null}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <Card className="rounded-[1.8rem] p-6">
-          <div className="grid gap-4 md:grid-cols-4">
+      <section className="grid gap-6 2xl:grid-cols-[1.05fr_0.95fr]">
+        <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <FieldWrapper label="Statut">
               <Select
                 value={filters.status}
@@ -256,11 +283,11 @@ export function ModerationDashboard() {
                 }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-[var(--foreground)]">
+                  <div className="min-w-0">
+                    <p className="break-words font-medium text-[var(--foreground)]">
                       {incident.professional_name} · {incident.client_name}
                     </p>
-                    <p className="mt-1 text-sm text-[var(--foreground-muted)]">
+                    <p className="mt-1 break-words text-sm text-[var(--foreground-muted)]">
                       {incident.category} · {incident.status} · {incident.severity}
                     </p>
                   </div>
@@ -268,7 +295,7 @@ export function ModerationDashboard() {
                     {new Date(incident.created_at).toLocaleDateString("fr-FR")}
                   </p>
                 </div>
-                <p className="mt-3 text-sm leading-6 text-[var(--foreground-muted)]">
+                <p className="mt-3 break-words text-sm leading-6 text-[var(--foreground-muted)]">
                   {incident.description}
                 </p>
               </button>
@@ -281,23 +308,38 @@ export function ModerationDashboard() {
           </div>
         </Card>
 
-        <div className="space-y-6">
-          <Card className="rounded-[1.8rem] p-6">
+        <div className="min-w-0 space-y-6">
+          <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
             <h2 className="text-2xl font-semibold text-[var(--foreground)]">
               Détail signalement
             </h2>
             {selectedIncident ? (
               <>
                 <div className="mt-4 space-y-3 text-sm leading-7 text-[var(--foreground-muted)]">
-                  <p><span className="font-medium text-[var(--foreground)]">Praticien :</span> {selectedIncident.professional_name}</p>
-                  <p><span className="font-medium text-[var(--foreground)]">Client :</span> {selectedIncident.client_name} · {selectedIncident.client_email}</p>
-                  <p><span className="font-medium text-[var(--foreground)]">Motif :</span> {selectedIncident.category}</p>
-                  <p><span className="font-medium text-[var(--foreground)]">Description :</span> {selectedIncident.description}</p>
-                  <p><span className="font-medium text-[var(--foreground)]">Résolution :</span> {selectedIncident.resolution || "En attente"}</p>
+                  <p className="break-words"><span className="font-medium text-[var(--foreground)]">Praticien :</span> {selectedIncident.professional_name}</p>
+                  <p className="break-words"><span className="font-medium text-[var(--foreground)]">Client :</span> {selectedIncident.client_name} · {selectedIncident.client_email}</p>
+                  <p className="break-words"><span className="font-medium text-[var(--foreground)]">Motif :</span> {selectedIncident.category}</p>
+                  <p className="break-words"><span className="font-medium text-[var(--foreground)]">Description :</span> {selectedIncident.description}</p>
+                  <p className="break-words"><span className="font-medium text-[var(--foreground)]">Résolution :</span> {selectedIncident.resolution || "En attente"}</p>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-[1.2rem] border border-[var(--border)] bg-[var(--background-soft)] p-4 text-sm">
+                    <p className="text-[var(--foreground-muted)]">Score de confiance</p>
+                    <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">{trustScore}/100</p>
+                  </div>
+                  <div className="rounded-[1.2rem] border border-[var(--border)] bg-[var(--background-soft)] p-4 text-sm">
+                    <p className="text-[var(--foreground-muted)]">Restrictions liées</p>
+                    <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">{relatedRestrictions.length}</p>
+                  </div>
+                  <div className="rounded-[1.2rem] border border-[var(--border)] bg-[var(--background-soft)] p-4 text-sm">
+                    <p className="text-[var(--foreground-muted)]">Signaux risque</p>
+                    <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">{relatedRiskEntries.length}</p>
+                  </div>
                 </div>
 
                 <form onSubmit={handleQuickUpdate} className="mt-5 space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <FieldWrapper label="Statut">
                       <Select name="status" defaultValue={selectedIncident.status}>
                         <option value="open">open</option>
@@ -323,7 +365,7 @@ export function ModerationDashboard() {
 
                 <form onSubmit={handleDecision} className="mt-6 space-y-4 rounded-[1.4rem] border border-[var(--border)] p-5">
                   <h3 className="text-lg font-semibold text-[var(--foreground)]">Décision modérateur</h3>
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <FieldWrapper label="Décision">
                       <Select name="decision_type" defaultValue="dismiss">
                         <option value="dismiss">Classer sans suite</option>
@@ -342,6 +384,29 @@ export function ModerationDashboard() {
                   </FieldWrapper>
                   <Button type="submit">Enregistrer la décision</Button>
                 </form>
+
+                <div className="mt-6 space-y-3 rounded-[1.4rem] border border-[var(--border)] p-5">
+                  <h3 className="text-lg font-semibold text-[var(--foreground)]">Historique sanctions</h3>
+                  {selectedIncident.decisions.length ? (
+                    selectedIncident.decisions.map((decision) => (
+                      <div
+                        key={decision.id}
+                        className="rounded-[1.2rem] border border-[var(--border)] bg-[var(--background-soft)] p-4 text-sm"
+                      >
+                        <p className="font-medium text-[var(--foreground)]">
+                          {decision.decision_type} · {decision.created_by_email}
+                        </p>
+                        <p className="mt-1 break-words text-[var(--foreground-muted)]">
+                          {decision.notes || "Sans note"} · {new Date(decision.created_at).toLocaleString("fr-FR")}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-[var(--foreground-muted)]">
+                      Aucune sanction enregistrée pour ce signalement.
+                    </p>
+                  )}
+                </div>
               </>
             ) : (
               <p className="mt-4 text-sm text-[var(--foreground-muted)]">
@@ -351,7 +416,7 @@ export function ModerationDashboard() {
           </Card>
 
           <section className="grid gap-6">
-            <Card className="rounded-[1.8rem] p-6">
+            <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
               <h2 className="text-xl font-semibold text-[var(--foreground)]">Restrictions actives</h2>
               <div className="mt-4 space-y-3">
                 {restrictions.slice(0, 6).map((restriction) => (
@@ -359,7 +424,7 @@ export function ModerationDashboard() {
                     <p className="font-medium text-[var(--foreground)]">
                       {restriction.restriction_type} · {restriction.status}
                     </p>
-                    <p className="mt-1 text-[var(--foreground-muted)]">
+                    <p className="mt-1 break-words text-[var(--foreground-muted)]">
                       {restriction.professional_name || restriction.client_email || restriction.client_phone}
                     </p>
                   </div>
@@ -367,7 +432,7 @@ export function ModerationDashboard() {
               </div>
             </Card>
 
-            <Card className="rounded-[1.8rem] p-6">
+            <Card className="min-w-0 rounded-[1.8rem] p-5 md:p-6">
               <h2 className="text-xl font-semibold text-[var(--foreground)]">Registre de risque</h2>
               <div className="mt-4 space-y-3">
                 {riskEntries.slice(0, 6).map((entry) => (
@@ -375,7 +440,7 @@ export function ModerationDashboard() {
                     <p className="font-medium text-[var(--foreground)]">
                       {entry.risk_level} · {entry.reason}
                     </p>
-                    <p className="mt-1 text-[var(--foreground-muted)]">
+                    <p className="mt-1 break-words text-[var(--foreground-muted)]">
                       {entry.professional_name || entry.client_email || entry.client_phone}
                     </p>
                   </div>
