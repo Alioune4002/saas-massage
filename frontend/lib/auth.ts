@@ -50,6 +50,12 @@ export function getAuthenticatedHomePath(user: MeResponse | null) {
     return "/login";
   }
 
+  const hasPractitionerWorkspace = Boolean(user.professional_slug);
+
+  if (hasPractitionerWorkspace) {
+    return user.onboarding_completed ? "/dashboard" : "/bienvenue";
+  }
+
   if (user.role === "admin" || user.is_superuser) {
     return "/admin";
   }

@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import type { MeResponse } from "@/lib/api";
@@ -31,14 +31,32 @@ const ADMIN_ROLE_SECTIONS: Record<string, Set<AdminSection>> = {
   support: new Set(["dashboard", "users", "support"]),
 };
 
-function getServerApiBase() {
+async function getServerApiBase() {
   const configuredBase = process.env.NEXT_PUBLIC_API_URL?.trim();
-  return (configuredBase || "http://127.0.0.1:8000/api").replace(/\/$/, "");
+  if (configuredBase) {
+    return configuredBase.replace(/\/$/, "");
+  }
+
+  const headerStore = await headers();
+  const forwardedHost = headerStore.get("x-forwarded-host")?.trim() || "";
+  const host = headerStore.get("host")?.trim() || "";
+  const candidateHost = forwardedHost || host;
+
+  if (
+    candidateHost === "www.nuadyx.com" ||
+    candidateHost === "nuadyx.com" ||
+    candidateHost.endsWith(".nuadyx.com")
+  ) {
+    return "https://api.nuadyx.com/api";
+  }
+
+  return "http://127.0.0.1:8000/api";
 }
 
 async function fetchCurrentUserFromBackend(token: string): Promise<MeResponse | null> {
   try {
-    const response = await fetch(`${getServerApiBase()}/auth/me/`, {
+    const apiBase = await getServerApiBase();
+    const response = await fetch(`${apiBase}/auth/me/`, {
       method: "GET",
       headers: {
         Authorization: `Token ${token}`,
@@ -89,4 +107,3 @@ export async function requireAdminAccess(section?: AdminSection) {
     allowedSections: Array.from(allowedSections),
   };
 }
-
