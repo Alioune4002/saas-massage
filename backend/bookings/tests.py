@@ -767,6 +767,35 @@ class PublicServiceValidationTests(APITestCase):
             ).exists()
         )
 
+    def test_client_can_validate_when_service_was_completed_recently_even_if_slot_is_old(self):
+        self.slot.start_at = timezone.now() - timedelta(days=3, hours=1)
+        self.slot.end_at = timezone.now() - timedelta(days=3)
+        self.slot.save(update_fields=["start_at", "end_at", "updated_at"])
+        self.booking.service_completed_at = timezone.now() - timedelta(minutes=2)
+        self.booking.service_validation_requested_at = timezone.now() - timedelta(minutes=2)
+        self.booking.fulfillment_status = Booking.FulfillmentStatus.COMPLETED_BY_PRACTITIONER
+        self.booking.save(
+            update_fields=[
+                "service_completed_at",
+                "service_validation_requested_at",
+                "fulfillment_status",
+                "updated_at",
+            ]
+        )
+
+        response = self.client.post(
+            f"/api/bookings/{self.booking.id}/validate-service/",
+            {"token": self.token},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.booking.refresh_from_db()
+        self.assertEqual(
+            self.booking.fulfillment_status,
+            Booking.FulfillmentStatus.COMPLETED_VALIDATED_BY_CLIENT,
+        )
+
 
 class BookingMaintenanceCommandTests(TestCase):
     def setUp(self):

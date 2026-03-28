@@ -1,6 +1,7 @@
 import datetime as dt
 import hashlib
 import json
+import logging
 import re
 import secrets
 from decimal import Decimal
@@ -93,6 +94,8 @@ from .serializers import (
     TrustedClientSerializer,
     ManualPaymentSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _expire_stale_payment_holds():
@@ -356,7 +359,14 @@ class PublicBookingValidateServiceView(APIView):
 
     def post(self, request, booking_id):
         booking = generics.get_object_or_404(Booking, id=booking_id)
-        dispute_deadline = booking.slot.end_at + dt.timedelta(hours=_incident_report_window_hours())
+        validation_reference = (
+            booking.service_validation_requested_at
+            or booking.service_completed_at
+            or booking.slot.end_at
+        )
+        dispute_deadline = validation_reference + dt.timedelta(
+            hours=_incident_report_window_hours()
+        )
         if timezone.now() > dispute_deadline:
             raise ValidationError("Le délai pour confirmer ou signaler un problème sur cette prestation est dépassé.")
         if not verify_client_action_token(
@@ -430,7 +440,12 @@ class PublicBookingIncidentView(APIView):
         token = request.data.get("token", "")
         if not _verify_guest_access_token(booking, token):
             raise ValidationError("Lien d’accès à la réservation invalide.")
-        if timezone.now() > booking.slot.end_at + dt.timedelta(hours=_incident_report_window_hours()):
+        validation_reference = (
+            booking.service_validation_requested_at
+            or booking.service_completed_at
+            or booking.slot.end_at
+        )
+        if timezone.now() > validation_reference + dt.timedelta(hours=_incident_report_window_hours()):
             raise ValidationError("Le délai pour signaler un problème sur cette réservation est dépassé.")
 
         description = (request.data.get("description") or "").strip()
@@ -1198,33 +1213,83 @@ class ProfessionalPaymentConnectView(APIView):
         )
         config = get_stripe_connect_config()
 
+        def create_or_refresh_connected_account():
+            stripe_account = create_connected_account(
+                email=professional.user.email,
+                business_name=professional.business_name,
+                country=payment_account.country,
+                idempotency_key=f"stripe-account-{professional.id}",
+            )
+            payment_account.stripe_account_id = stripe_account.get("id", "")
+            payment_account.account_email = professional.user.email
+            payment_account.onboarding_status = ProfessionalPaymentAccount.OnboardingStatus.PENDING
+            payment_account.save()
+
+        def build_account_link():
+            return create_account_link(
+                account_id=payment_account.stripe_account_id,
+                refresh_url=f"{settings.FRONTEND_APP_URL}/payments?refresh=1",
+                return_url=f"{settings.FRONTEND_APP_URL}/payments?connected=1",
+                idempotency_key=f"stripe-account-link-{professional.id}",
+            )
+
+        def humanize_connect_error(raw_message: str) -> str:
+            normalized = (raw_message or "").lower()
+
+            if "api key" in normalized or "invalid api key" in normalized:
+                return "La connexion Stripe n’est pas encore activée correctement sur cet environnement."
+
+            if "return_url" in normalized or "refresh_url" in normalized or "url_invalid" in normalized:
+                return "La configuration de retour Stripe n’est pas valide. Le support NUADYX doit finaliser l’URL publique du site."
+
+            if "no such account" in normalized or "resource_missing" in normalized:
+                return "Le compte Stripe précédent n’est plus reconnu. Réessaie pour relancer une connexion propre."
+
+            if "country" in normalized:
+                return "Le pays du compte de paiement n’est pas reconnu. Vérifie la configuration du profil puis réessaie."
+
+            return (
+                "La connexion Stripe n’a pas pu être préparée pour le moment. "
+                "Vérifiez la configuration du compte ou réessayez dans quelques instants."
+            )
+
         if config.enabled:
             try:
                 if not payment_account.stripe_account_id:
-                    stripe_account = create_connected_account(
-                        email=professional.user.email,
-                        business_name=professional.business_name,
-                        country=payment_account.country,
-                        idempotency_key=f"stripe-account-{professional.id}",
-                    )
-                    payment_account.stripe_account_id = stripe_account.get("id", "")
-                    payment_account.account_email = professional.user.email
-                    payment_account.onboarding_status = ProfessionalPaymentAccount.OnboardingStatus.PENDING
-                    payment_account.save()
+                    create_or_refresh_connected_account()
 
-                account_link = create_account_link(
-                    account_id=payment_account.stripe_account_id,
-                    refresh_url=f"{settings.FRONTEND_APP_URL}/payments?refresh=1",
-                    return_url=f"{settings.FRONTEND_APP_URL}/payments?connected=1",
-                    idempotency_key=f"stripe-account-link-{professional.id}",
-                )
+                try:
+                    account_link = build_account_link()
+                except StripeConnectError as exc:
+                    raw_message = str(exc)
+                    normalized = raw_message.lower()
+                    should_recreate_account = bool(payment_account.stripe_account_id) and (
+                        "no such account" in normalized or "resource_missing" in normalized
+                    )
+
+                    if should_recreate_account:
+                        logger.warning(
+                            "Stripe Connect account missing for professional %s (%s). Recreating account.",
+                            professional.id,
+                            professional.user.email,
+                        )
+                        payment_account.stripe_account_id = ""
+                        payment_account.onboarding_status = ProfessionalPaymentAccount.OnboardingStatus.NOT_STARTED
+                        payment_account.save(update_fields=["stripe_account_id", "onboarding_status", "updated_at"])
+                        create_or_refresh_connected_account()
+                        account_link = build_account_link()
+                    else:
+                        raise
             except StripeConnectError as exc:
+                logger.exception(
+                    "Stripe Connect onboarding preparation failed for professional %s (%s): %s",
+                    professional.id,
+                    professional.user.email,
+                    exc,
+                )
                 raise ValidationError(
                     {
-                        "payment_account": (
-                            "La connexion Stripe n’a pas pu être préparée pour le moment. "
-                            "Vérifiez la configuration du compte ou réessayez dans quelques instants."
-                        )
+                        "payment_account": humanize_connect_error(str(exc))
                     }
                 ) from exc
 

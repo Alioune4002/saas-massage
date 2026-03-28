@@ -827,7 +827,7 @@ def mark_booking_service_completed(*, booking: Booking, actor_user=None):
         actor_role=Booking.ActorRole.PRACTITIONER,
         actor_user=actor_user,
         event_type="fulfillment.completed_by_practitioner",
-        message="La prestation a été marquée comme terminée. La validation client peut être demandée.",
+        message="La prestation a été marquée comme terminée. Un email de confirmation est envoyé au client.",
     )
     logger.info("booking.fulfillment.completed_by_practitioner", extra={"booking_id": str(booking.id)})
     return booking

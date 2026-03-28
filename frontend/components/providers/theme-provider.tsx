@@ -30,13 +30,7 @@ function applyTheme(theme: Theme) {
 }
 
 function getPreferredTheme(): Theme {
-  if (typeof window !== "undefined") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
-  }
-
-  return "dark";
+  return "light";
 }
 
 function getInitialTheme(): Theme {

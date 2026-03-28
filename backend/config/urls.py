@@ -14,11 +14,15 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+import re
+from urllib.parse import urlparse
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.http import JsonResponse
-from django.urls import include, path
+from django.urls import include, path, re_path
+from django.views.static import serve as static_serve
 
 
 def api_root(_request):
@@ -52,4 +56,16 @@ urlpatterns = [
     path("api/", include("reviews.urls")),
 ]
 
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+media_url_path = urlparse(settings.MEDIA_URL).path or settings.MEDIA_URL
+if media_url_path.startswith("/") and settings.MEDIA_ROOT:
+    media_pattern = rf"^{re.escape(media_url_path.lstrip('/'))}(?P<path>.*)$"
+    urlpatterns += [
+        re_path(
+            media_pattern,
+            static_serve,
+            {"document_root": settings.MEDIA_ROOT},
+        )
+    ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

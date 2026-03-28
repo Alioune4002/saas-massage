@@ -1,7 +1,9 @@
 import logging
+import re
+from html import escape
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.utils import formats, timezone
 
 logger = logging.getLogger(__name__)
@@ -16,19 +18,115 @@ def _format_appointment_window(start_at, end_at):
     return f"{day_label} de {start_label} à {end_label}"
 
 
+def _get_public_site_url() -> str:
+    frontend_url = (getattr(settings, "FRONTEND_APP_URL", "") or "").strip()
+    if frontend_url:
+        return frontend_url.rstrip("/")
+    return "https://www.nuadyx.com"
+
+
+def _linkify_text(value: str) -> str:
+    escaped = escape(value)
+    url_pattern = re.compile(r"(https?://[^\s<]+)")
+    return url_pattern.sub(
+        lambda match: (
+            f'<a href="{match.group(1)}" '
+            'style="color:#2457ff;text-decoration:none;font-weight:600;">'
+            f"{match.group(1)}</a>"
+        ),
+        escaped,
+    )
+
+
+def _render_email_html(*, subject: str, message: str) -> str:
+    blocks = []
+    for paragraph in [part.strip() for part in message.split("\n\n") if part.strip()]:
+        lines = [line.strip() for line in paragraph.splitlines() if line.strip()]
+        bullet_lines = [line[2:].strip() for line in lines if line.startswith("- ")]
+        plain_lines = [line for line in lines if not line.startswith("- ")]
+
+        if plain_lines:
+            blocks.append(
+                "<p style=\"margin:0 0 16px;color:#445066;font-size:15px;line-height:1.7;\">"
+                + "<br />".join(_linkify_text(line) for line in plain_lines)
+                + "</p>"
+            )
+
+        if bullet_lines:
+            blocks.append(
+                "<ul style=\"margin:0 0 16px 18px;padding:0;color:#445066;font-size:15px;line-height:1.7;\">"
+                + "".join(
+                    f"<li style=\"margin:0 0 8px;\">{_linkify_text(line)}</li>"
+                    for line in bullet_lines
+                )
+                + "</ul>"
+            )
+
+    site_url = _get_public_site_url()
+    return f"""
+<!DOCTYPE html>
+<html lang="fr">
+  <body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#132033;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f7fb;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border-radius:24px;overflow:hidden;border:1px solid #dde5f0;">
+            <tr>
+              <td style="padding:28px 32px;background:linear-gradient(135deg,#eff5ff 0%,#f9fcff 100%);border-bottom:1px solid #dde5f0;">
+                <div style="font-size:12px;letter-spacing:0.28em;text-transform:uppercase;color:#2457ff;font-weight:700;">NUADYX</div>
+                <div style="margin-top:10px;font-size:28px;line-height:1.2;font-weight:700;color:#132033;">{escape(subject)}</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px;">
+                {''.join(blocks)}
+                <div style="margin-top:28px;padding:18px 20px;border-radius:18px;background:#f7f9fc;border:1px solid #e4ebf3;">
+                  <p style="margin:0;color:#5a6475;font-size:13px;line-height:1.7;">
+                    Cet email a été envoyé par NUADYX pour le suivi de votre activité, de vos réservations ou de votre compte.
+                  </p>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 32px;background:#132033;">
+                <p style="margin:0 0 8px;color:#ffffff;font-size:14px;font-weight:700;">NUADYX</p>
+                <p style="margin:0 0 6px;color:#d4dceb;font-size:13px;line-height:1.6;">
+                  L’annuaire des praticiens du massage et du bien-être.
+                </p>
+                <p style="margin:0 0 6px;color:#d4dceb;font-size:13px;line-height:1.6;">
+                  <a href="{site_url}" style="color:#ffffff;text-decoration:none;">{site_url}</a>
+                </p>
+                <p style="margin:0;color:#d4dceb;font-size:13px;line-height:1.6;">
+                  Support : <a href="mailto:support@nuadyx.com" style="color:#ffffff;text-decoration:none;">support@nuadyx.com</a>
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+""".strip()
+
+
 def _send_transactional_email(*, subject: str, message: str, recipients: list[str]):
     valid_recipients = [recipient for recipient in recipients if recipient]
     if not valid_recipients:
         return
 
     try:
-        send_mail(
+        email = EmailMultiAlternatives(
             subject=subject,
-            message=message,
+            body=message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=valid_recipients,
-            fail_silently=False,
+            to=valid_recipients,
         )
+        email.attach_alternative(
+            _render_email_html(subject=subject, message=message),
+            "text/html",
+        )
+        email.send(fail_silently=False)
     except Exception:
         logger.exception("Impossible d'envoyer l'email transactionnel %s.", subject)
 

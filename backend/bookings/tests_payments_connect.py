@@ -44,6 +44,59 @@ class PaymentConnectErrorHandlingTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("payment_account", response.data)
 
+    @override_settings(
+        NUADYX_STRIPE_SECRET_KEY="sk_test_123",
+        NUADYX_STRIPE_PUBLISHABLE_KEY="pk_test_123",
+        NUADYX_STRIPE_WEBHOOK_SECRET="whsec_test_123",
+        FRONTEND_APP_URL="https://www.nuadyx.com",
+    )
+    @patch(
+        "bookings.views.create_account_link",
+        side_effect=StripeConnectError("Invalid URL for return_url"),
+    )
+    @patch("bookings.views.create_connected_account", return_value={"id": "acct_test_failure"})
+    def test_connect_account_returns_actionable_message_for_invalid_frontend_url(
+        self,
+        _create_account,
+        _create_link,
+    ):
+        response = self.client.post("/api/dashboard/payments/connect-account/")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.data["payment_account"],
+            "La configuration de retour Stripe n’est pas valide. Le support NUADYX doit finaliser l’URL publique du site.",
+        )
+
+    @override_settings(
+        NUADYX_STRIPE_SECRET_KEY="sk_test_123",
+        NUADYX_STRIPE_PUBLISHABLE_KEY="pk_test_123",
+        NUADYX_STRIPE_WEBHOOK_SECRET="whsec_test_123",
+        FRONTEND_APP_URL="https://www.nuadyx.com",
+    )
+    @patch(
+        "bookings.views.create_account_link",
+        side_effect=[
+            StripeConnectError("No such account: 'acct_stale_123'"),
+            {"url": "https://connect.stripe.test/onboarding"},
+        ],
+    )
+    @patch(
+        "bookings.views.create_connected_account",
+        side_effect=[{"id": "acct_stale_123"}, {"id": "acct_fresh_123"}],
+    )
+    def test_connect_account_recreates_missing_stripe_account_once(
+        self,
+        create_account_mock,
+        create_link_mock,
+    ):
+        response = self.client.post("/api/dashboard/payments/connect-account/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["url"], "https://connect.stripe.test/onboarding")
+        self.assertEqual(create_account_mock.call_count, 2)
+        self.assertEqual(create_link_mock.call_count, 2)
+
     def test_verification_update_accepts_simple_multipart_payload(self):
         response = self.client.patch(
             "/api/dashboard/verification/",

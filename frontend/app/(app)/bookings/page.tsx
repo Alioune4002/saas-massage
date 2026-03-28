@@ -163,7 +163,7 @@ export default function BookingsPage() {
           : nextAction === "start"
             ? "La prestation est marquée comme commencée."
             : nextAction === "complete"
-              ? "La prestation est marquée comme terminée. La validation client peut maintenant être demandée."
+              ? "La prestation est marquée comme terminée. Un email de confirmation est envoyé au client pour valider le bon déroulement de la séance."
               : nextAction === "issue"
                 ? "Le signalement est enregistré. Le versement reste bloqué pendant la vérification."
                 : nextAction === "client-no-show"
@@ -473,13 +473,18 @@ export default function BookingsPage() {
                             : booking.fulfillment_status === "in_progress"
                               ? "Prestation en cours"
                               : booking.fulfillment_status === "completed_by_practitioner"
-                                ? "Terminée côté praticien, validation client en attente"
+                                ? "Prestation terminée côté praticien. Confirmation client en attente par email sécurisé."
                                 : booking.fulfillment_status === "completed_validated_by_client"
-                                  ? "Prestations validée par le client"
+                                  ? "Prestation confirmée par le client"
                                   : booking.fulfillment_status === "auto_completed"
-                                    ? "Validation automatique après délai"
+                                    ? "Prestation validée automatiquement après le délai prévu"
                                     : "Signalement ou litige en cours"}
                       </p>
+                      {booking.fulfillment_status === "completed_by_practitioner" ? (
+                        <p className="mt-2 text-sm leading-6 text-[var(--foreground-muted)]">
+                          Le client reçoit un lien sécurisé par email pour confirmer que la séance s’est bien déroulée ou signaler un problème. Aucune validation finale n’est attendue de votre côté.
+                        </p>
+                      ) : null}
                       {booking.issue_reason ? (
                         <div className="mt-3 rounded-[1rem] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3">
                           <div className="flex items-center gap-2 text-[var(--foreground)]">
@@ -491,7 +496,10 @@ export default function BookingsPage() {
                           </p>
                         </div>
                       ) : null}
-                      {booking.status === "confirmed" ? (
+                      {booking.status === "confirmed" &&
+                      ["scheduled", "client_arrived", "in_progress"].includes(
+                        booking.fulfillment_status
+                      ) ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Button
                             variant="ghost"
